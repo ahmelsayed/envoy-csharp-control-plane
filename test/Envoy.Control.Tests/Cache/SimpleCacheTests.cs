@@ -2,14 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Envoy.Api.V2;
+using Envoy.Api.V2.Core;
 using Envoy.Api.V2.Auth;
 using Envoy.Control.Cache;
 using FluentAssertions;
 using Xunit;
 
-namespace Envoy.Control.Tests
+namespace Envoy.Control.Cache.Tests
 {
-    public class SimpleCacheTest
+    public class SimpleCacheTests
     {
         private static readonly string CLUSTER_NAME = "cluster0";
         private static readonly string SECONDARY_CLUSTER_NAME = "cluster1";
@@ -67,7 +68,7 @@ namespace Envoy.Control.Tests
 
             var discoveryRequest = new DiscoveryRequest
             {
-                Node = new Api.V2.Core.Node(),
+                Node = new Node(),
                 TypeUrl = Resources.ENDPOINT_TYPE_URL
             };
 
@@ -92,7 +93,7 @@ namespace Envoy.Control.Tests
 
             var discoveryRequest = new DiscoveryRequest
             {
-                Node = new Api.V2.Core.Node(),
+                Node = new Node(),
                 TypeUrl = Resources.ENDPOINT_TYPE_URL
             };
 
@@ -122,7 +123,7 @@ namespace Envoy.Control.Tests
                 var responses = new List<Response>();
                 var discoveryRequest = new DiscoveryRequest
                 {
-                    Node = new Api.V2.Core.Node(),
+                    Node = new Node(),
                     TypeUrl = typeUrl
                 };
 
@@ -154,7 +155,7 @@ namespace Envoy.Control.Tests
                 var responses = new List<Response>();
                 var discoveryRequest = new DiscoveryRequest
                 {
-                    Node = new Api.V2.Core.Node(),
+                    Node = new Node(),
                     TypeUrl = typeUrl
                 };
 
@@ -197,7 +198,7 @@ namespace Envoy.Control.Tests
                 var responses = new List<Response>();
                 var discoveryRequest = new DiscoveryRequest
                 {
-                    Node = new Api.V2.Core.Node(),
+                    Node = new Node(),
                     TypeUrl = typeUrl,
                     VersionInfo = SNAPSHOT1.GetVersion(typeUrl)
                 };
@@ -252,7 +253,7 @@ namespace Envoy.Control.Tests
                         var responses = new List<Response>();
                         var discoveryRequest = new DiscoveryRequest
                         {
-                            Node = new Api.V2.Core.Node(),
+                            Node = new Node(),
                             TypeUrl = typeUrl,
                             VersionInfo = MULTIPLE_RESOURCES_SNAPSHOT2.GetVersion(typeUrl)
                         };
@@ -316,7 +317,7 @@ namespace Envoy.Control.Tests
                         var responses = new List<Response>();
                         var discoveryRequest = new DiscoveryRequest
                         {
-                            Node = new Api.V2.Core.Node(),
+                            Node = new Node(),
                             TypeUrl = typeUrl,
                             VersionInfo = SNAPSHOT2.GetVersion(typeUrl)
                         };
@@ -359,7 +360,7 @@ namespace Envoy.Control.Tests
                         var responses = new List<Response>();
                         var discoveryRequest = new DiscoveryRequest
                         {
-                            Node = new Api.V2.Core.Node(),
+                            Node = new Node(),
                             TypeUrl = typeUrl,
                             VersionInfo = SNAPSHOT1.GetVersion(typeUrl)
                         };
@@ -408,7 +409,7 @@ namespace Envoy.Control.Tests
                         var responses = new List<Response>();
                         var discoveryRequest = new DiscoveryRequest
                         {
-                            Node = new Api.V2.Core.Node(),
+                            Node = new Node(),
                             TypeUrl = typeUrl,
                         };
 
@@ -453,7 +454,7 @@ namespace Envoy.Control.Tests
             var responses = new List<Response>();
             var discoveryRequest = new DiscoveryRequest
             {
-                Node = new Api.V2.Core.Node(),
+                Node = new Node(),
                 TypeUrl = Resources.ROUTE_TYPE_URL
             };
             discoveryRequest.ResourceNames.Add(ROUTE_NAME);
@@ -494,7 +495,7 @@ namespace Envoy.Control.Tests
             cache.SetSnapshot("key", SNAPSHOT1);
             var discoveryRequest = new DiscoveryRequest
             {
-                Node = new Api.V2.Core.Node(),
+                Node = new Node(),
                 TypeUrl = ""
             };
 
@@ -527,7 +528,7 @@ namespace Envoy.Control.Tests
             cache.Groups.Should().BeEmpty();
             var discoveryRequest = new DiscoveryRequest
             {
-                Node = new Api.V2.Core.Node(),
+                Node = new Node(),
                 TypeUrl = ""
             };
 

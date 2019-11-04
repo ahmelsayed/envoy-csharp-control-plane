@@ -86,7 +86,7 @@ namespace Envoy.Control.Cache
                 }
                 else if (result == null)
                 {
-                    throw new InvalidOperationException($"Can't unpack type");
+                    throw new InvalidOperationException($"Cannot unpack type");
                 }
                 else
                 {

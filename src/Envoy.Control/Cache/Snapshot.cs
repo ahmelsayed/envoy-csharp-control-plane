@@ -53,15 +53,15 @@ namespace Envoy.Control.Cache
 
         public Snapshot(
             IEnumerable<Cluster> clusters,
-            IResourceVersionResolver clustersVersionResolver,
+            Func<IEnumerable<string>, string> clustersVersionResolver,
             IEnumerable<ClusterLoadAssignment> endpoints,
-            IResourceVersionResolver endpointsVersionResolver,
+            Func<IEnumerable<string>, string> endpointsVersionResolver,
             IEnumerable<Listener> listeners,
-            IResourceVersionResolver listenersVersionResolver,
+            Func<IEnumerable<string>, string> listenersVersionResolver,
             IEnumerable<RouteConfiguration> routes,
-            IResourceVersionResolver routesVersionResolver,
+            Func<IEnumerable<string>, string> routesVersionResolver,
             IEnumerable<Secret> secrets,
-            IResourceVersionResolver secretsVersionResolver)
+            Func<IEnumerable<string>, string> secretsVersionResolver)
         {
             this.Clusters = new SnapshotResources<Cluster>(clusters, clustersVersionResolver);
             this.Endpoints = new SnapshotResources<ClusterLoadAssignment>(endpoints, endpointsVersionResolver);

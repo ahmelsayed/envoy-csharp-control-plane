@@ -14,7 +14,7 @@ using static Envoy.Api.V2.Core.GrpcService.Types;
 using static Envoy.Api.V2.Core.SocketAddress.Types;
 using static Envoy.Config.Filter.Network.HttpConnectionManager.V2.HttpConnectionManager.Types;
 
-namespace Envoy.Control.Cache
+namespace Envoy.Control.Cache.Tests
 {
     public class TestResources
     {
