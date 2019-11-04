@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- <PackageReference Include="Google.Protobuf" Version="3.11.0-rc0" /> -->
+    <PackageReference Include="Grpc.AspNetCore" Version="2.24.0" />
+    <PackageReference Include="Grpc.AspNetCore.Server.ClientFactory" Version="2.24.0" />
+    <PackageReference Include="grpc.tools" Version="2.25.0-private">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="System.Reactive" Version="4.2.0" />
+    <PackageReference Include="System.Reactive.Linq" Version="4.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+  <Protobuf Include="Protos/**/*.proto" OutputDir="%(RelativeDir)" CompileOutputs="false" ProtoRoot="Protos" />
+</ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\protobuf\csharp\src\Google.Protobuf\Google.Protobuf.csproj" />
+  </ItemGroup>
+</Project>
