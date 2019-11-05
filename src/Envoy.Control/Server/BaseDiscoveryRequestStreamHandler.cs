@@ -132,11 +132,11 @@ namespace Envoy.Control.Server
 
         public abstract bool Ads { get; }
 
-        public abstract DiscoveryResponse GetLatestResponse(string typeUrl);
+        public abstract DiscoveryResponse? GetLatestResponse(string typeUrl);
 
         public abstract void SetLatestResponse(string typeUrl, DiscoveryResponse response);
 
-        public abstract ISet<string> GetAckedResources(string typeUrl);
+        public abstract ISet<string>? GetAckedResources(string typeUrl);
 
         public abstract void SetAckedResources(string typeUrl, ISet<string> resources);
 

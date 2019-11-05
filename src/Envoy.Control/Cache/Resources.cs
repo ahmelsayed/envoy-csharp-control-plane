@@ -78,6 +78,11 @@ namespace Envoy.Control.Cache
             if (RESOURCE_TYPE_BY_URL.TryGetValue(anyResource.TypeUrl, out System.Type type))
             {
                 var method = typeof(Any).GetMethod("Unpack");
+                if (method == null)
+                {
+                    throw new InvalidOperationException($"Any type is missing Unpack method. {typeof(Any).AssemblyQualifiedName}");
+                }
+
                 var genericMethod = method.MakeGenericMethod(type);
                 var result = genericMethod.Invoke(anyResource, null);
                 if (result != null && result is IMessage message)
@@ -155,7 +160,7 @@ namespace Envoy.Control.Cache
                                     refs.Add(config.Rds.RouteConfigName);
                                 }
                             }
-                            catch (InvalidProtocolBufferException e)
+                            catch (InvalidProtocolBufferException)
                             {
                                 // LOGGER.error(
                                 //     "Failed to convert HTTP connection manager config struct into protobuf message for listener {}",

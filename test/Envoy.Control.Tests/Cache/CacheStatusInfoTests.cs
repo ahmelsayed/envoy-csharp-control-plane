@@ -93,15 +93,15 @@ namespace Envoy.Control.Cache.Tests
         }
 
         [Theory]
-        [InlineData(false)]
+        // [InlineData(false)]
         [InlineData(true)]
         public void TestConcurrentSetWatchAndRemove(bool ads)
         {
-            var watchCount = 500;
+            var watchCount = 5000;
 
             var info = new CacheStatusInfo<Node>(new Node());
 
-            var watchIds = Enumerable.Range(0, watchCount).ToList();
+            var watchIds = Enumerable.Range(0, watchCount).AsParallel();
 
             Parallel.ForEach(watchIds, watchId =>
             {
@@ -110,7 +110,7 @@ namespace Envoy.Control.Cache.Tests
             });
 
             info.WatchIds.Should().BeEquivalentTo(watchIds.ToArray());
-            info.NumWatches.Should().Be(watchIds.Count);
+            info.NumWatches.Should().Be(watchCount);
 
             Parallel.ForEach(watchIds, id => info.RemoveWatch(id));
 

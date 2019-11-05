@@ -20,7 +20,7 @@ namespace Envoy.Control.Server
             var wait = m_semaphore.WaitAsync();
             return wait.IsCompleted
                 ? m_releaser
-                : wait.ContinueWith((_, state) => (IDisposable)state,
+                : wait.ContinueWith((_, state) => (IDisposable)state!,
                     m_releaser.Result, CancellationToken.None,
                     TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }

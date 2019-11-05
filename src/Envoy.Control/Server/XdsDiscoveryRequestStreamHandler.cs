@@ -8,8 +8,8 @@ namespace Envoy.Control.Server
 {
     internal class XdsDiscoveryRequestStreamHandler : BaseDiscoveryRequestStreamHandler
     {
-        private volatile Watch watch;
-        private volatile DiscoveryResponse latestResponse;
+        private volatile Watch? watch;
+        private volatile DiscoveryResponse? latestResponse;
         // ackedResources is only used in the same thread so it need not be volatile
         private ISet<String> ackedResources = new HashSet<string>(0);
         public XdsDiscoveryRequestStreamHandler(
@@ -38,12 +38,12 @@ namespace Envoy.Control.Server
             this.watch = watchCreator();
         }
 
-        public override ISet<string> GetAckedResources(string typeUrl)
+        public override ISet<string>? GetAckedResources(string typeUrl)
         {
             return this.ackedResources;
         }
 
-        public override DiscoveryResponse GetLatestResponse(string typeUrl)
+        public override DiscoveryResponse? GetLatestResponse(string typeUrl)
             => this.latestResponse;
 
         public override void SetAckedResources(string typeUrl, ISet<string> resources)

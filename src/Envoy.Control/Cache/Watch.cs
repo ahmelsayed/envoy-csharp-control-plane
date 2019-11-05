@@ -10,7 +10,7 @@ namespace Envoy.Control.Cache
         public DiscoveryRequest Request { get; }
         public Action<Response> ResponseAction { get; }
         private volatile int isCancelled = 0;
-        private Action _stop;
+        private Action? _stop;
 
         public Watch(bool ads, DiscoveryRequest request, Action<Response> responseAction)
         {

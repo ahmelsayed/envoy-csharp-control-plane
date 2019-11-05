@@ -45,10 +45,10 @@ namespace Envoy.Control.Server
             });
         }
 
-        public override ISet<string> GetAckedResources(string typeUrl)
+        public override ISet<string>? GetAckedResources(string typeUrl)
             => this._ackedResources.GetValueOrDefault(typeUrl, emptyHashSet);
 
-        public override DiscoveryResponse GetLatestResponse(string typeUrl)
+        public override DiscoveryResponse? GetLatestResponse(string typeUrl)
             => this._latestResponse.GetValueOrDefault(typeUrl, null);
 
         public override void SetAckedResources(string typeUrl, ISet<string> resources)

@@ -15,14 +15,14 @@ namespace Envoy.Control.Server
     internal class DiscoveryServerStartup
     {
         private readonly DiscoveryServerConfig _configuration;
-        internal static IConfigWatcher ConfigWatcher;
+        internal static IConfigWatcher? ConfigWatcher;
 
         // This method gets called by the runtime. Use this method to add services to the container.
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
-        public DiscoveryServerStartup(IConfiguration configruation)
+        public DiscoveryServerStartup(IConfiguration configuration)
         {
             this._configuration = new DiscoveryServerConfig();
-            configruation.Bind(this._configuration);
+            configuration.Bind(this._configuration);
         }
 
         public void ConfigureServices(IServiceCollection services)

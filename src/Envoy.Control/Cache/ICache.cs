@@ -6,6 +6,6 @@ namespace Envoy.Control.Cache
     {
         IEnumerable<T> Groups { get; }
 
-        IStatusInfo<T> GetStatusInfo(T group);
+        IStatusInfo<T>? GetStatusInfo(T group);
     }
 }

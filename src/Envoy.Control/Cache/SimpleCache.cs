@@ -5,20 +5,21 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using Envoy.Api.V2;
+using Envoy.Api.V2.Core;
 using Google.Protobuf;
 
 namespace Envoy.Control.Cache
 {
-    public class SimpleCache<T> : ISnapshotCache<T>
+    public class SimpleCache<T> : ISnapshotCache<T> where T : notnull
     {
         private readonly ReaderWriterLockSlim _rwLock = new ReaderWriterLockSlim();
         private readonly IDictionary<T, Snapshot> snapshots = new Dictionary<T, Snapshot>();
         private readonly ConcurrentDictionary<T, CacheStatusInfo<T>> statuses = new ConcurrentDictionary<T, CacheStatusInfo<T>>();
         private long _watchCount = 0;
         public IEnumerable<T> Groups => this.statuses.Keys.ToImmutableHashSet();
-        private readonly Func<Api.V2.Core.Node, T> hash;
+        private readonly Func<Node, T> hash;
 
-        public SimpleCache(Func<Api.V2.Core.Node, T> hash)
+        public SimpleCache(Func<Node, T> hash)
         {
             this.hash = hash;
         }
@@ -28,7 +29,7 @@ namespace Envoy.Control.Cache
             this._rwLock.EnterWriteLock();
             try
             {
-                this.statuses.TryGetValue(group, out CacheStatusInfo<T> status);
+                this.statuses.TryGetValue(group, out CacheStatusInfo<T>? status);
                 if (status != null && status.NumWatches > 0)
                 {
                     // Log warning
@@ -48,7 +49,7 @@ namespace Envoy.Control.Cache
         public Watch CreateWatch(
             bool ads,
             DiscoveryRequest request,
-            ISet<string> knownResourceNames,
+            ISet<string>? knownResourceNames,
             Action<Response> responseCallback)
         {
             var group = this.hash(request.Node);
@@ -61,7 +62,7 @@ namespace Envoy.Control.Cache
 
                 status.SetLastWatchRequestTime(DateTimeOffset.UtcNow.Ticks);
 
-                this.snapshots.TryGetValue(group, out Snapshot snapshot);
+                this.snapshots.TryGetValue(group, out Snapshot? snapshot);
                 var version = snapshot == null
                     ? string.Empty
                     : snapshot.GetVersion(request.TypeUrl, request.ResourceNames);
@@ -137,12 +138,12 @@ namespace Envoy.Control.Cache
             }
         }
 
-        public Snapshot GetSnapshot(T group)
+        public Snapshot? GetSnapshot(T group)
         {
             this._rwLock.EnterReadLock();
             try
             {
-                if (this.snapshots.TryGetValue(group, out Snapshot snapshot))
+                if (this.snapshots.TryGetValue(group, out Snapshot? snapshot))
                 {
                     return snapshot;
                 }
@@ -156,7 +157,7 @@ namespace Envoy.Control.Cache
 
         public void SetSnapshot(T group, Snapshot snapshot)
         {
-            CacheStatusInfo<T> status;
+            CacheStatusInfo<T>? status;
             this._rwLock.EnterWriteLock();
             try
             {
@@ -199,12 +200,12 @@ namespace Envoy.Control.Cache
             });
         }
 
-        public IStatusInfo<T> GetStatusInfo(T group)
+        public IStatusInfo<T>? GetStatusInfo(T group)
         {
             this._rwLock.EnterReadLock();
             try
             {
-                if (this.statuses.TryGetValue(group, out CacheStatusInfo<T> status))
+                if (this.statuses.TryGetValue(group, out CacheStatusInfo<T>? status))
                 {
                     return status;
                 }
@@ -255,7 +256,7 @@ namespace Envoy.Control.Cache
                 watch.Respond(response);
                 return true;
             }
-            catch (WatchCancelledException e)
+            catch (WatchCancelledException)
             {
                 // LOGGER.error(
                 //     "failed to respond for {} from node {} at version {} with version {} because watch was already cancelled",
@@ -275,7 +276,7 @@ namespace Envoy.Control.Cache
                 : request.ResourceNames
                     .Select(r => resources.GetValueOrDefault(r))
                     .Where(r => r != null)
-                    .ToList();
+                    .ToList()!;
 
             return new Response(request, filtered, version);
         }
