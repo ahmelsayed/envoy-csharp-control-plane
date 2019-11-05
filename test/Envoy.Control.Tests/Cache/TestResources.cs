@@ -43,7 +43,7 @@ namespace Envoy.Control.Cache.Tests
             };
         }
 
-        public static Cluster createCluster(String clusterName, String address, uint port)
+        public static Cluster CreateCluster(String clusterName, String address, uint port)
         {
             var cluster = new Cluster
             {
@@ -185,7 +185,7 @@ namespace Envoy.Control.Cache.Tests
             return routeConfiguration;
         }
 
-        public static Secret createSecret(String secretName)
+        public static Secret CreateSecret(String secretName)
         {
             return new Secret
             {

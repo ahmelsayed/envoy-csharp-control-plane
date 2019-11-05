@@ -17,7 +17,8 @@ namespace Envoy.Control.Cache
 
         public SnapshotResources(IEnumerable<T> resources, Func<IEnumerable<string>, string> versionResolver)
         {
-            this.Resources = resources.ToDictionary(k => Cache.Resources.GetResourceName(k), v => v);
+            this.Resources = resources.ToDictionary(k => Cache.Resources.GetResourceName(k), v => v)
+                .ToImmutableDictionary();
             this.VersionResolver = versionResolver;
         }
 

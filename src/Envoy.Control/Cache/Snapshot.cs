@@ -159,7 +159,7 @@ namespace Envoy.Control.Cache
             {
                 throw new SnapshotConsistencyException(
                     string.Format(
-                        "Mismatched {0} -> {1} reference and resource lengths, [{3}] != {4}",
+                        "Mismatched {0} -> {1} reference and resource lengths, [{2}] != {3}",
                         parentTypeUrl,
                         dependencyTypeUrl,
                         string.Join(", ", resourceNames),
