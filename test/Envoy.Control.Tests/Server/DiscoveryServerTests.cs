@@ -121,7 +121,6 @@ namespace Envoy.Control.Server.Tests
                 responses.Should().Contain(r => r.TypeUrl == typeUrl && r.VersionInfo == VERSION,
                     "missing expected response of type %s", typeUrl);
             }
-            // await server.StopAsync();
         }
 
         [Fact]
@@ -205,14 +204,13 @@ namespace Envoy.Control.Server.Tests
             }
 
             configWatcher.counts.Should().HaveCount(Resources.TYPE_URLS.Count());
-            // await server.StopAsync();
         }
 
         [Fact]
         public async Task TestWatchClosed()
         {
             var configWatcher = new MockConfigWatcher(true, new Dictionary<string, (string, IEnumerable<IMessage>)>());
-            var server = new DiscoveryServer(configWatcher);
+            using var server = new DiscoveryServer(configWatcher);
             server.UseAggregatedDiscoveryService();
             await server.StartAsync();
 
@@ -244,7 +242,6 @@ namespace Envoy.Control.Server.Tests
                 completed.Should().BeFalse();
                 responseErrors.Should().BeEmpty();
             }
-            // await server.StopAsync();
         }
 
         [Fact]
@@ -281,7 +278,6 @@ namespace Envoy.Control.Server.Tests
                 error.Should().BeTrue();
                 responseErrors.Should().BeEmpty();
             }
-            // await server.StopAsync();
         }
 
         [Fact]
@@ -336,7 +332,37 @@ namespace Envoy.Control.Server.Tests
                 // Assert that 2 watches have been created for this resource type.
                 configWatcher.counts[typeUrl].Should().Be(2);
             }
-            // await server.StopAsync();
+        }
+
+        // TODO: test doesn't assert anything
+        [Fact]
+        public async Task TestAggregateHandlerDefaultRequestType()
+        {
+            var configWatcher = new MockConfigWatcher(true, new Dictionary<string, (string, IEnumerable<IMessage>)>());
+            using var server = new DiscoveryServer(configWatcher);
+            server.UseAggregatedDiscoveryService();
+            await server.StartAsync();
+
+            var httpClientHandler = new HttpClientHandler();
+            // Return `true` to allow certificates that are untrusted/invalid
+            httpClientHandler.ServerCertificateCustomValidationCallback =
+                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+            var httpClient = new HttpClient(httpClientHandler);
+
+            var channel = GrpcChannel.ForAddress("https://localhost:6000", new GrpcChannelOptions { HttpClient = httpClient });
+            var client = new AggregatedDiscoveryServiceClient(channel);
+
+            var duplex = client.StreamAggregatedResources();
+            var clientTask = HandleResponses(duplex.ResponseStream);
+
+            // Leave off the type URL. For ADS requests it should fail because the type URL is required.
+            await duplex.RequestStream.WriteAsync(new DiscoveryRequest
+            {
+                Node = NODE,
+            });
+
+            await duplex.RequestStream.CompleteAsync();
+            var (responseErrors, responses, completed, error) = await clientTask;
         }
 
         private async Task<(List<string>, List<DiscoveryResponse>, bool, bool)> HandleResponses(IAsyncStreamReader<DiscoveryResponse> responseStream, bool sendError = false)
