@@ -25,30 +25,7 @@ namespace Envoy.Control.Server
             IServerStreamWriter<DiscoveryResponse> responseStream,
             ServerCallContext context)
         {
-            await foreach (var request in requestStream.ReadAllAsync())
-            {
-                System.Console.WriteLine(request.TypeUrl);
-                var discoveryResponse = new DiscoveryResponse
-                {
-                    VersionInfo = "1",
-                    TypeUrl = request.TypeUrl,
-                    Nonce = Interlocked.Increment(ref this.ticket).ToString()
-                };
-                discoveryResponse.Resources.Add(Any.Pack(new Cluster
-                {
-                    Name = "cluster" + this.ticket,
-                    ConnectTimeout = Duration.FromTimeSpan(TimeSpan.FromSeconds(5)),
-                    // Type = DiscoveryType.Static,
-                    // DnsLookupFamily = DnsLookupFamily.V4Only,
-                    // LbPolicy = LbPolicy.RoundRobin,
-                    // TlsContext = new UpstreamTlsContext
-                    // {
-                    //     Sni = "www.google.com"
-                    // }
-                }));
-                await responseStream.WriteAsync(discoveryResponse);
-            }
-            // await this._streamHandler.HandleXdsStreams(requestStream, responseStream, Resources.CLUSTER_TYPE_URL);
+            await this._streamHandler.HandleXdsStreams(requestStream, responseStream, Resources.CLUSTER_TYPE_URL);
         }
     }
 }
