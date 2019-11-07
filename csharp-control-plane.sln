@@ -7,9 +7,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{51612AC8-3FE
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Envoy.Control", "src\Envoy.Control\Envoy.Control.csproj", "{BE9CAA47-E5FB-4E22-B970-2D354DD67205}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{C3654E95-5DFC-4B4D-BD0A-B946754B2D0C}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{C3654E95-5DFC-4B4D-BD0A-B946754B2D0C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Envoy.Control.Tests", "test\Envoy.Control.Tests\Envoy.Control.Tests.csproj", "{AB019F47-1F1B-40FE-9F19-340C21A16584}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Envoy.Control.Tests", "tests\Envoy.Control.Tests\Envoy.Control.Tests.csproj", "{AB019F47-1F1B-40FE-9F19-340C21A16584}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "_build", "build\_build.csproj", "{086712A2-B23F-4FE6-A656-3D584B275DDD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -24,6 +26,8 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{086712A2-B23F-4FE6-A656-3D584B275DDD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{086712A2-B23F-4FE6-A656-3D584B275DDD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BE9CAA47-E5FB-4E22-B970-2D354DD67205}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{BE9CAA47-E5FB-4E22-B970-2D354DD67205}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BE9CAA47-E5FB-4E22-B970-2D354DD67205}.Debug|x64.ActiveCfg = Debug|Any CPU

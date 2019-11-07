@@ -12,8 +12,5 @@ jobs:
         uses: actions/setup-dotnet@v1
         with:
           dotnet-version: 3.0.100
-      - name: Run tests
-        run: dotnet test test/Envoy.Control.Tests/Envoy.Control.Tests.csproj
-
-      - name: Build with dotnet
-        run: dotnet build src/Envoy.Control/Envoy.Control.csproj --configuration Release
+      - name: Build
+        run: ./build.sh

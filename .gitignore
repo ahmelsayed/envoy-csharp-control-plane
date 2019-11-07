@@ -22,3 +22,4 @@ nCrunchTemp*
 
 .fake/
 artifacts/
+.tmp/
