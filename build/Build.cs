@@ -23,7 +23,7 @@ class Build : NukeBuild
     ///   - Microsoft VisualStudio     https://nuke.build/visualstudio
     ///   - Microsoft VSCode           https://nuke.build/vscode
 
-    public static int Main() => Execute<Build>(x => x.Test);
+    public static int Main() => Execute<Build>(x => x.Compile);
 
     [Parameter("Configuration to build - Default is 'Debug' (local) or 'Release' (server)")]
     readonly Configuration Configuration = IsLocalBuild ? Configuration.Debug : Configuration.Release;
@@ -52,8 +52,17 @@ class Build : NukeBuild
                 .SetProjectFile(Solution));
         });
 
-    Target Compile => _ => _
+    Target Test => _ => _
         .DependsOn(Restore)
+        .Executes(() =>
+        {
+            DotNetTest(_ => _
+                .SetProjectFile(TestsDirectory / "Envoy.Control.Tests" / "Envoy.Control.Tests.csproj")
+                .EnableNoRestore());
+        });
+
+    Target Compile => _ => _
+        .DependsOn(Test)
         .Executes(() =>
         {
             DotNetBuild(_ => _
@@ -65,14 +74,6 @@ class Build : NukeBuild
                 .EnableNoRestore());
         });
 
-    Target Test => _ => _
-        .DependsOn(Compile)
-        .Executes(() =>
-        {
-            DotNetTest(_ => _
-                .SetProjectFile(TestsDirectory / "Envoy.Control.Tests" / "Envoy.Control.Tests.csproj")
-                .EnableNoBuild());
-        });
 
     Target Publish => _ => _
         .DependsOn(Test)
