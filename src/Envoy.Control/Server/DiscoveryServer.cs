@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -92,8 +93,8 @@ namespace Envoy.Control.Server
             .ConfigureLogging(logging =>
             {
                 logging.ClearProviders();
-                logging.AddConsole();
-                logging.SetMinimumLevel(LogLevel.Debug);
+                // logging.AddConsole();
+                // logging.SetMinimumLevel(LogLevel.Debug);
             })
             .ConfigureServices(services =>
             {
@@ -105,7 +106,8 @@ namespace Envoy.Control.Server
             .ConfigureWebHostDefaults(webBuilder =>
             {
                 webBuilder
-                    .UseUrls("https://+:6000", "http://+:6001")
+                    .ConfigureKestrel(k => k.ListenLocalhost(5000, options => options.Protocols = HttpProtocols.Http2))
+                    // .UseUrls("https://+:6000", "http://+:6001")
                     .Configure((app) =>
                     {
                         var env = app.ApplicationServices.GetRequiredService<IWebHostEnvironment>();

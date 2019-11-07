@@ -1,0 +1,19 @@
+name: Build
+
+on: [push]
+
+jobs:
+  ubuntu-latest:
+    name: ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Run './build.sh Compile Publish'
+        run: ./build.sh Compile Publish
+  windows-latest:
+    name: windows-latest
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Run 'powershell .\build.ps1 Compile Publish'
+        run: powershell .\build.ps1 Compile Publish
