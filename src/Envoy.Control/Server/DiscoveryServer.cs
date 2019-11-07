@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Envoy.Control.Cache;
@@ -15,13 +17,23 @@ namespace Envoy.Control.Server
 {
     public class DiscoveryServer : IDisposable
     {
+        public const string ANY_TYPE_URL = "";
         readonly IConfigWatcher _configWatcher;
+        private readonly IEnumerable<IDiscoveryServerCallbacks> _callbacks;
         private IHost? _host = null;
         private readonly object _lock = new object();
         private readonly IDictionary<string, Action<IEndpointRouteBuilder>> _enabledServices
             = new Dictionary<string, Action<IEndpointRouteBuilder>>();
 
         public DiscoveryServer(IConfigWatcher configWatcher)
+            : this(Enumerable.Empty<IDiscoveryServerCallbacks>(), configWatcher)
+        { }
+
+        public DiscoveryServer(IDiscoveryServerCallbacks callbacks, IConfigWatcher configWatcher)
+            : this(new[] { callbacks }, configWatcher)
+        { }
+
+        public DiscoveryServer(IEnumerable<IDiscoveryServerCallbacks> callbacks, IConfigWatcher configWatcher)
         {
             if (configWatcher == null)
             {
@@ -29,6 +41,7 @@ namespace Envoy.Control.Server
             }
 
             this._configWatcher = configWatcher;
+            this._callbacks = callbacks.ToImmutableArray();
         }
 
         public DiscoveryServer UseAggregatedDiscoveryService(Action<IEndpointRouteBuilder>? action = null)
@@ -85,6 +98,7 @@ namespace Envoy.Control.Server
             .ConfigureServices(services =>
             {
                 services.AddSingleton<IConfigWatcher>(this._configWatcher);
+                services.AddSingleton<IEnumerable<IDiscoveryServerCallbacks>>(this._callbacks);
                 services.AddSingleton<IDiscoveryStreamHandler, DiscoveryStreamHandler>();
                 services.AddGrpc();
             })

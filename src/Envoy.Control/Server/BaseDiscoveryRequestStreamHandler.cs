@@ -17,6 +17,7 @@ namespace Envoy.Control.Server
         private readonly IAsyncStreamWriter<DiscoveryResponse> _responseStream;
         private readonly long _streamId;
         private readonly IConfigWatcher _configWatcher;
+        private readonly IEnumerable<IDiscoveryServerCallbacks> _callbacks;
         private volatile bool _isClosing = false;
         private long streamNonce;
         private readonly AsyncLock _lock = new AsyncLock();
@@ -26,20 +27,22 @@ namespace Envoy.Control.Server
             IServerStreamWriter<DiscoveryResponse> responseStream,
             string defaultTypeUrl,
             long streamId,
-            IConfigWatcher configWatcher)
+            IConfigWatcher configWatcher,
+            IEnumerable<IDiscoveryServerCallbacks> callbacks)
         {
             this._defaultTypeUrl = defaultTypeUrl;
             this._requestStream = requestStream;
             this._responseStream = responseStream;
             this._streamId = streamId;
             this._configWatcher = configWatcher;
+            this._callbacks = callbacks;
         }
 
         public async Task RunAsync(CancellationToken token = default)
         {
             try
             {
-                await foreach (var request in this._requestStream.ReadAllAsync())
+                await foreach (var request in this._requestStream.ReadAllAsync(token))
                 {
                     var requestTypeUrl = string.IsNullOrEmpty(request.TypeUrl)
                         ? this._defaultTypeUrl
@@ -56,6 +59,8 @@ namespace Envoy.Control.Server
                     //         nonce,
                     //         request.getVersionInfo());
                     // }
+
+                    this._callbacks.ForEach(cb => cb.OnStreamRequest(this._streamId, request));
 
                     var latestResponse = this.GetLatestResponse(requestTypeUrl);
                     var resourceNonce = latestResponse == null ? null : latestResponse.Nonce;
@@ -78,12 +83,14 @@ namespace Envoy.Control.Server
                             async r => await this.Send(r, requestTypeUrl)));
                     }
                 }
+                this._callbacks.ForEach(cb => cb.OnStreamClose(this._streamId, this._defaultTypeUrl));
                 this._isClosing = true;
                 this.Cancel();
             }
             catch (Exception e)
             {
                 Console.WriteLine(e);
+                this._callbacks.ForEach(cb => cb.OnStreamCloseWithError(this._streamId, this._defaultTypeUrl, e));
                 this._isClosing = true;
                 this.Cancel();
                 // log
@@ -108,7 +115,7 @@ namespace Envoy.Control.Server
 
                 // LOGGER.debug("[{}] response {} with nonce {} version {}", streamId, typeUrl, nonce, response.version());
 
-                // discoverySever.callbacks.forEach(cb->cb.onStreamResponse(streamId, response.request(), discoveryResponse));
+                this._callbacks.ForEach(cb => cb.OnStreamResponse(this._streamId, response.Request, discoveryResponse));
 
                 // Store the latest response *before* we send the response. This ensures that by the time the request
                 // is processed the map is guaranteed to be updated. Doing it afterwards leads to a race conditions

@@ -17,8 +17,9 @@ namespace Envoy.Control.Server
             IServerStreamWriter<DiscoveryResponse> responseStream,
             string defaultTypeUrl,
             long streamId,
-            IConfigWatcher configWatcher)
-            : base(requestStream, responseStream, defaultTypeUrl, streamId, configWatcher)
+            IConfigWatcher configWatcher,
+            IEnumerable<IDiscoveryServerCallbacks> callbacks)
+            : base(requestStream, responseStream, defaultTypeUrl, streamId, configWatcher, callbacks)
         {
         }
 

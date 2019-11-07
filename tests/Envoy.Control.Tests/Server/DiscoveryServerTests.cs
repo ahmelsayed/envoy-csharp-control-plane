@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Envoy.Api.V2;
@@ -14,6 +15,7 @@ using FluentAssertions;
 using Google.Protobuf;
 using Grpc.Core;
 using Grpc.Net.Client;
+using NSubstitute;
 using Xunit;
 using static Envoy.Api.V2.ClusterDiscoveryService;
 using static Envoy.Api.V2.EndpointDiscoveryService;
@@ -54,14 +56,7 @@ namespace Envoy.Control.Server.Tests
             server.UseAggregatedDiscoveryService();
             await server.StartAsync();
 
-            var httpClientHandler = new HttpClientHandler();
-            // Return `true` to allow certificates that are untrusted/invalid
-            httpClientHandler.ServerCertificateCustomValidationCallback =
-                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-            var httpClient = new HttpClient(httpClientHandler);
-
-            var channel = GrpcChannel.ForAddress("https://localhost:6000", new GrpcChannelOptions { HttpClient = httpClient });
-            var client = new AggregatedDiscoveryServiceClient(channel);
+            var client = new AggregatedDiscoveryServiceClient(CreateGrpcChannel());
 
             var duplex = client.StreamAggregatedResources();
             var clientTask = Task.Run(async () => await HandleResponses(duplex.ResponseStream));
@@ -136,13 +131,7 @@ namespace Envoy.Control.Server.Tests
                 .UseSecretDiscoveryService();
             await server.StartAsync();
 
-            var httpClientHandler = new HttpClientHandler();
-            // Return `true` to allow certificates that are untrusted/invalid
-            httpClientHandler.ServerCertificateCustomValidationCallback =
-                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-            var httpClient = new HttpClient(httpClientHandler);
-
-            var channel = GrpcChannel.ForAddress("https://localhost:6000", new GrpcChannelOptions { HttpClient = httpClient });
+            var channel = CreateGrpcChannel();
             var clusterClient = new ClusterDiscoveryServiceClient(channel);
             var endpointClient = new EndpointDiscoveryServiceClient(channel);
             var listenerClient = new ListenerDiscoveryServiceClient(channel);
@@ -214,14 +203,7 @@ namespace Envoy.Control.Server.Tests
             server.UseAggregatedDiscoveryService();
             await server.StartAsync();
 
-            var httpClientHandler = new HttpClientHandler();
-            // Return `true` to allow certificates that are untrusted/invalid
-            httpClientHandler.ServerCertificateCustomValidationCallback =
-                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-            var httpClient = new HttpClient(httpClientHandler);
-
-            var channel = GrpcChannel.ForAddress("https://localhost:6000", new GrpcChannelOptions { HttpClient = httpClient });
-            var client = new AggregatedDiscoveryServiceClient(channel);
+            var client = new AggregatedDiscoveryServiceClient(CreateGrpcChannel());
 
             foreach (var typeUrl in Resources.TYPE_URLS)
             {
@@ -252,14 +234,7 @@ namespace Envoy.Control.Server.Tests
             server.UseAggregatedDiscoveryService();
             await server.StartAsync();
 
-            var httpClientHandler = new HttpClientHandler();
-            // Return `true` to allow certificates that are untrusted/invalid
-            httpClientHandler.ServerCertificateCustomValidationCallback =
-                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-            var httpClient = new HttpClient(httpClientHandler);
-
-            var channel = GrpcChannel.ForAddress("https://localhost:6000", new GrpcChannelOptions { HttpClient = httpClient });
-            var client = new AggregatedDiscoveryServiceClient(channel);
+            var client = new AggregatedDiscoveryServiceClient(CreateGrpcChannel());
 
             foreach (var typeUrl in Resources.TYPE_URLS)
             {
@@ -288,14 +263,7 @@ namespace Envoy.Control.Server.Tests
             server.UseAggregatedDiscoveryService();
             await server.StartAsync();
 
-            var httpClientHandler = new HttpClientHandler();
-            // Return `true` to allow certificates that are untrusted/invalid
-            httpClientHandler.ServerCertificateCustomValidationCallback =
-                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-            var httpClient = new HttpClient(httpClientHandler);
-
-            var channel = GrpcChannel.ForAddress("https://localhost:6000", new GrpcChannelOptions { HttpClient = httpClient });
-            var client = new AggregatedDiscoveryServiceClient(channel);
+            var client = new AggregatedDiscoveryServiceClient(CreateGrpcChannel());
 
             foreach (var typeUrl in Resources.TYPE_URLS)
             {
@@ -343,14 +311,7 @@ namespace Envoy.Control.Server.Tests
             server.UseAggregatedDiscoveryService();
             await server.StartAsync();
 
-            var httpClientHandler = new HttpClientHandler();
-            // Return `true` to allow certificates that are untrusted/invalid
-            httpClientHandler.ServerCertificateCustomValidationCallback =
-                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-            var httpClient = new HttpClient(httpClientHandler);
-
-            var channel = GrpcChannel.ForAddress("https://localhost:6000", new GrpcChannelOptions { HttpClient = httpClient });
-            var client = new AggregatedDiscoveryServiceClient(channel);
+            var client = new AggregatedDiscoveryServiceClient(CreateGrpcChannel());
 
             var duplex = client.StreamAggregatedResources();
             var clientTask = HandleResponses(duplex.ResponseStream);
@@ -363,6 +324,391 @@ namespace Envoy.Control.Server.Tests
 
             await duplex.RequestStream.CompleteAsync();
             var (responseErrors, responses, completed, error) = await clientTask;
+        }
+
+        public async Task TestSeparateHandlersDefaultRequestType()
+        {
+            var configWatcher = new MockConfigWatcher(false, CreateResponses());
+            using var server = new DiscoveryServer(configWatcher);
+            server
+                .UseClusterDiscoveryService()
+                .UseEndpointDiscoveryService()
+                .UseListenerDiscoveryService()
+                .UseRouteDiscoveryService()
+                .UseSecretDiscoveryService();
+            await server.StartAsync();
+
+            var channel = CreateGrpcChannel();
+            var clusterClient = new ClusterDiscoveryServiceClient(channel);
+            var endpointClient = new EndpointDiscoveryServiceClient(channel);
+            var listenerClient = new ListenerDiscoveryServiceClient(channel);
+            var routeClient = new RouteDiscoveryServiceClient(channel);
+            var secretClient = new SecretDiscoveryServiceClient(channel);
+
+            foreach (var typeUrl in Resources.TYPE_URLS)
+            {
+                Task<(List<string>, List<DiscoveryResponse>, bool, bool)> clientTask = null;
+                AsyncDuplexStreamingCall<DiscoveryRequest, DiscoveryResponse> duplex = null;
+                switch (typeUrl)
+                {
+                    case Resources.CLUSTER_TYPE_URL:
+                        duplex = clusterClient.StreamClusters();
+                        clientTask = Task.Run(async () => await HandleResponses(duplex.ResponseStream));
+                        break;
+                    case Resources.ENDPOINT_TYPE_URL:
+                        duplex = endpointClient.StreamEndpoints();
+                        clientTask = Task.Run(async () => await HandleResponses(duplex.ResponseStream));
+                        break;
+                    case Resources.LISTENER_TYPE_URL:
+                        duplex = listenerClient.StreamListeners();
+                        clientTask = Task.Run(async () => await HandleResponses(duplex.ResponseStream));
+                        break;
+                    case Resources.ROUTE_TYPE_URL:
+                        duplex = routeClient.StreamRoutes();
+                        clientTask = Task.Run(async () => await HandleResponses(duplex.ResponseStream));
+                        break;
+                    case Resources.SECRET_TYPE_URL:
+                        duplex = secretClient.StreamSecrets();
+                        clientTask = Task.Run(async () => await HandleResponses(duplex.ResponseStream));
+                        break;
+                    default:
+                        Assert.True(false, "Unsupported resource type: " + typeUrl);
+                        break;
+                }
+
+                // Leave off the type URL. For xDS requests it should default to the value for that handler's type.
+                var discoveryRequest = new DiscoveryRequest
+                {
+                    Node = NODE,
+                };
+
+                await duplex.RequestStream.WriteAsync(discoveryRequest);
+                await duplex.RequestStream.CompleteAsync();
+
+                var (responseErrors, _, _, _) = await clientTask;
+
+                responseErrors.Should().BeEmpty();
+            }
+        }
+
+        [Fact]
+        public async Task TestCallbacksAggregateHandler()
+        {
+            var assertionErrors = new List<string>();
+            int streamCloses = 0, streamOpens = 0, streamRequests = 0, streamResponses = 0;
+            var callbacks = Substitute.For<IDiscoveryServerCallbacks>();
+
+            void ValidateTypeUrl(string typeUrl, string caller)
+            {
+                if (typeUrl != DiscoveryServer.ANY_TYPE_URL)
+                {
+                    assertionErrors.Add($"{caller}#typeUrl => expected {DiscoveryServer.ANY_TYPE_URL}, got {typeUrl}");
+                }
+            }
+
+            callbacks
+                .When(x => x.OnStreamClose(Arg.Any<long>(), Arg.Any<string>()))
+                .Do(args =>
+                {
+                    ValidateTypeUrl(args.ArgAt<string>(1), "OnStreamClose");
+                    Interlocked.Increment(ref streamCloses);
+                });
+
+            callbacks
+                .When(x => x.OnStreamOpen(Arg.Any<long>(), Arg.Any<string>()))
+                .Do(args =>
+                {
+                    ValidateTypeUrl(args.ArgAt<string>(1), "OnStreamOpen");
+                    Interlocked.Increment(ref streamOpens);
+                });
+
+            callbacks
+                .When(x => x.OnStreamRequest(Arg.Any<long>(), Arg.Any<DiscoveryRequest>()))
+                .Do(_ => Interlocked.Increment(ref streamRequests));
+
+            callbacks
+                .When(x => x.OnStreamResponse(Arg.Any<long>(), Arg.Any<DiscoveryRequest>(), Arg.Any<DiscoveryResponse>()))
+                .Do(_ => Interlocked.Increment(ref streamResponses));
+
+
+            var configWatcher = new MockConfigWatcher(false, CreateResponses());
+            using var server = new DiscoveryServer(callbacks, configWatcher);
+            server.UseAggregatedDiscoveryService();
+            await server.StartAsync();
+
+            var client = new AggregatedDiscoveryServiceClient(CreateGrpcChannel());
+            var duplex = client.StreamAggregatedResources();
+            var clientTask = HandleResponses(duplex.ResponseStream);
+
+            await duplex.RequestStream.WriteAsync(new DiscoveryRequest
+            {
+                Node = NODE,
+                TypeUrl = Resources.LISTENER_TYPE_URL
+            });
+
+            WaitUntil(ref streamOpens, 1);
+            streamOpens.Should().Be(1);
+
+            await duplex.RequestStream.WriteAsync(new DiscoveryRequest
+            {
+                Node = NODE,
+                TypeUrl = Resources.CLUSTER_TYPE_URL
+            });
+
+            var cluster = new DiscoveryRequest
+            {
+                Node = NODE,
+                TypeUrl = Resources.ENDPOINT_TYPE_URL,
+            };
+            cluster.ResourceNames.Add(CLUSTER_NAME);
+
+            await duplex.RequestStream.WriteAsync(cluster);
+
+            var route = new DiscoveryRequest
+            {
+                Node = NODE,
+                TypeUrl = Resources.ROUTE_TYPE_URL
+            };
+            route.ResourceNames.Add(ROUTE_NAME);
+            await duplex.RequestStream.WriteAsync(route);
+
+            var secret = new DiscoveryRequest
+            {
+                Node = NODE,
+                TypeUrl = Resources.SECRET_TYPE_URL,
+            };
+            secret.ResourceNames.Add(SECRET_NAME);
+            await duplex.RequestStream.WriteAsync(secret);
+
+
+            WaitUntil(ref streamRequests, Resources.TYPE_URLS.Count());
+            streamRequests.Should().Be(Resources.TYPE_URLS.Count());
+
+            WaitUntil(ref streamRequests, Resources.TYPE_URLS.Count());
+            streamResponses.Should().Be(Resources.TYPE_URLS.Count());
+
+            // Send another round of requests. These should not trigger any responses.
+            streamResponses = 0;
+            streamRequests = 0;
+
+            await duplex.RequestStream.WriteAsync(new DiscoveryRequest
+            {
+                Node = NODE,
+                ResponseNonce = "0",
+                VersionInfo = VERSION,
+                TypeUrl = Resources.LISTENER_TYPE_URL
+            });
+
+            await duplex.RequestStream.WriteAsync(new DiscoveryRequest
+            {
+                Node = NODE,
+                ResponseNonce = "1",
+                TypeUrl = Resources.CLUSTER_TYPE_URL,
+                VersionInfo = VERSION,
+            });
+
+            var cluster2 = new DiscoveryRequest
+            {
+                Node = NODE,
+                ResponseNonce = "2",
+                TypeUrl = Resources.ENDPOINT_TYPE_URL,
+                VersionInfo = VERSION
+            };
+            cluster2.ResourceNames.Add(CLUSTER_NAME);
+            await duplex.RequestStream.WriteAsync(cluster2);
+
+            var route2 = new DiscoveryRequest
+            {
+                Node = NODE,
+                ResponseNonce = "3",
+                TypeUrl = Resources.ROUTE_TYPE_URL,
+                VersionInfo = VERSION
+            };
+            route2.ResourceNames.Add(ROUTE_NAME);
+            await duplex.RequestStream.WriteAsync(route2);
+
+            var secert2 = new DiscoveryRequest
+            {
+                Node = NODE,
+                ResponseNonce = "4",
+                TypeUrl = Resources.SECRET_TYPE_URL,
+                VersionInfo = VERSION,
+            };
+            secert2.ResourceNames.Add(SECRET_NAME);
+            await duplex.RequestStream.WriteAsync(secert2);
+
+            WaitUntil(ref streamRequests, Resources.TYPE_URLS.Count());
+            streamRequests.Should().Be(Resources.TYPE_URLS.Count());
+            streamResponses.Should().Be(0);
+
+            await duplex.RequestStream.CompleteAsync();
+
+            WaitUntil(ref streamCloses, 1);
+            streamCloses.Should().Be(1);
+
+            assertionErrors.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task TestCallbacksSeparateHandlers()
+        {
+            var streamCloses = new ConcurrentDictionary<string, StrongBox<int>>();
+            var streamOpens = new ConcurrentDictionary<string, StrongBox<int>>();
+            var streamRequests = new ConcurrentDictionary<string, StrongBox<int>>();
+            var streamResponses = new ConcurrentDictionary<string, StrongBox<int>>();
+
+            Resources.TYPE_URLS.ForEach(typeUrl =>
+            {
+                streamCloses[typeUrl] = new StrongBox<int>(0);
+                streamOpens[typeUrl] = new StrongBox<int>(0);
+                streamRequests[typeUrl] = new StrongBox<int>(0);
+                streamResponses[typeUrl] = new StrongBox<int>(0);
+            });
+
+            var assertionErrors = new List<string>();
+            var callbacks = Substitute.For<IDiscoveryServerCallbacks>();
+
+            void ValidateTypeUrl(string typeUrl, string caller)
+            {
+                if (!Resources.TYPE_URLS.Contains(typeUrl))
+                {
+                    assertionErrors.Add($"{caller}#typeUrl => expected {DiscoveryServer.ANY_TYPE_URL}, got {typeUrl}");
+                }
+            }
+
+            callbacks
+                .When(x => x.OnStreamClose(Arg.Any<long>(), Arg.Any<string>()))
+                .Do(args =>
+                {
+                    var typeUrl = args.ArgAt<string>(1);
+                    ValidateTypeUrl(typeUrl, "OnStreamClose");
+                    Interlocked.Increment(ref streamCloses[typeUrl].Value);
+                });
+
+            callbacks
+                .When(x => x.OnStreamOpen(Arg.Any<long>(), Arg.Any<string>()))
+                .Do(args =>
+                {
+                    var typeUrl = args.ArgAt<string>(1);
+                    ValidateTypeUrl(typeUrl, "OnStreamOpen");
+                    Interlocked.Increment(ref streamOpens[typeUrl].Value);
+                });
+
+            callbacks
+                .When(x => x.OnStreamRequest(Arg.Any<long>(), Arg.Any<DiscoveryRequest>()))
+                .Do(args => Interlocked.Increment(ref streamRequests[args.ArgAt<DiscoveryRequest>(1).TypeUrl].Value));
+
+            callbacks
+                .When(x => x.OnStreamResponse(Arg.Any<long>(), Arg.Any<DiscoveryRequest>(), Arg.Any<DiscoveryResponse>()))
+                .Do(args => Interlocked.Increment(ref streamResponses[args.ArgAt<DiscoveryRequest>(1).TypeUrl].Value));
+
+            var configWatcher = new MockConfigWatcher(false, CreateResponses());
+            using var server = new DiscoveryServer(callbacks, configWatcher);
+            server
+                .UseClusterDiscoveryService()
+                .UseEndpointDiscoveryService()
+                .UseListenerDiscoveryService()
+                .UseRouteDiscoveryService()
+                .UseSecretDiscoveryService();
+            await server.StartAsync();
+
+            var channel = CreateGrpcChannel();
+            var clusterClient = new ClusterDiscoveryServiceClient(channel);
+            var endpointClient = new EndpointDiscoveryServiceClient(channel);
+            var listenerClient = new ListenerDiscoveryServiceClient(channel);
+            var routeClient = new RouteDiscoveryServiceClient(channel);
+            var secretClient = new SecretDiscoveryServiceClient(channel);
+
+            foreach (var typeUrl in Resources.TYPE_URLS)
+            {
+
+                Task<(List<string>, List<DiscoveryResponse>, bool, bool)> clientTask = null;
+                AsyncDuplexStreamingCall<DiscoveryRequest, DiscoveryResponse> duplex = null;
+                switch (typeUrl)
+                {
+                    case Resources.CLUSTER_TYPE_URL:
+                        duplex = clusterClient.StreamClusters();
+                        clientTask = Task.Run(async () => await HandleResponses(duplex.ResponseStream));
+                        break;
+                    case Resources.ENDPOINT_TYPE_URL:
+                        duplex = endpointClient.StreamEndpoints();
+                        clientTask = Task.Run(async () => await HandleResponses(duplex.ResponseStream));
+                        break;
+                    case Resources.LISTENER_TYPE_URL:
+                        duplex = listenerClient.StreamListeners();
+                        clientTask = Task.Run(async () => await HandleResponses(duplex.ResponseStream));
+                        break;
+                    case Resources.ROUTE_TYPE_URL:
+                        duplex = routeClient.StreamRoutes();
+                        clientTask = Task.Run(async () => await HandleResponses(duplex.ResponseStream));
+                        break;
+                    case Resources.SECRET_TYPE_URL:
+                        duplex = secretClient.StreamSecrets();
+                        clientTask = Task.Run(async () => await HandleResponses(duplex.ResponseStream));
+                        break;
+                    default:
+                        Assert.True(false, "Unsupported resource type: " + typeUrl);
+                        break;
+                }
+
+                var discoveryRequest = new DiscoveryRequest
+                {
+                    Node = NODE,
+                    TypeUrl = typeUrl
+                };
+
+                await duplex.RequestStream.WriteAsync(discoveryRequest);
+                WaitUntil(ref streamOpens[typeUrl].Value, 1);
+                streamOpens[typeUrl].Value.Should().Be(1);
+
+                WaitUntil(ref streamRequests[typeUrl].Value, 1);
+                streamRequests[typeUrl].Value.Should().Be(1);
+
+                await duplex.RequestStream.CompleteAsync();
+
+                WaitUntil(ref streamResponses[typeUrl].Value, 1);
+                streamResponses[typeUrl].Value.Should().Be(1);
+
+                WaitUntil(ref streamCloses[typeUrl].Value, 1);
+                streamCloses[typeUrl].Value.Should().Be(1);
+            }
+
+            assertionErrors.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task TestCallbacksOnError()
+        {
+            int streamClosesWithErrors = 0;
+            var callbacks = Substitute.For<IDiscoveryServerCallbacks>();
+
+            callbacks
+                .When(x => x.OnStreamCloseWithError(Arg.Any<long>(), Arg.Any<string>(), Arg.Any<Exception>()))
+                .Do(_ => Interlocked.Increment(ref streamClosesWithErrors));
+
+            var configWatcher = new MockConfigWatcher(false, CreateResponses());
+            using var server = new DiscoveryServer(callbacks, configWatcher);
+            server.UseAggregatedDiscoveryService();
+
+            await server.StartAsync();
+
+            var client = new AggregatedDiscoveryServiceClient(CreateGrpcChannel());
+            var ctx = new CancellationTokenSource();
+            var duplex = client.StreamAggregatedResources(cancellationToken: ctx.Token);
+            await duplex.RequestStream.WriteAsync(new DiscoveryRequest());
+            ctx.Cancel();
+            WaitUntil(ref streamClosesWithErrors, 1, TimeSpan.FromSeconds(1));
+            streamClosesWithErrors.Should().Be(1);
+        }
+
+        private void WaitUntil(ref int streamOpens, int condition, TimeSpan timeSpan = default)
+        {
+            timeSpan = timeSpan == default ? TimeSpan.FromSeconds(1) : timeSpan;
+            var trials = (int)(timeSpan.TotalMilliseconds / 50.0);
+            while (streamOpens != condition && trials-- != 0)
+            {
+                Thread.Sleep(50);
+            }
         }
 
         private async Task<(List<string>, List<DiscoveryResponse>, bool, bool)> HandleResponses(IAsyncStreamReader<DiscoveryResponse> responseStream, bool sendError = false)
@@ -432,6 +778,18 @@ namespace Envoy.Control.Server.Tests
                 { Resources.ROUTE_TYPE_URL, (VERSION, new[] { ROUTE })},
                 { Resources.SECRET_TYPE_URL, (VERSION, new[] { SECRET })},
             };
+        }
+
+
+        private GrpcChannel CreateGrpcChannel(string host = "localhost", int port = 6000, bool useHttps = true)
+        {
+            var httpClientHandler = new HttpClientHandler();
+            // Return `true` to allow certificates that are untrusted/invalid
+            httpClientHandler.ServerCertificateCustomValidationCallback =
+                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+            var httpClient = new HttpClient(httpClientHandler);
+
+            return GrpcChannel.ForAddress($"{(useHttps ? "https" : "http")}://{host}:{port}", new GrpcChannelOptions { HttpClient = httpClient });
         }
 
     }

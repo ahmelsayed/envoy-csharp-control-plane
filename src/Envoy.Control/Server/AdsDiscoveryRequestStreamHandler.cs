@@ -23,8 +23,9 @@ namespace Envoy.Control.Server
             IAsyncStreamReader<DiscoveryRequest> requestStream,
             IServerStreamWriter<DiscoveryResponse> responseStream,
             long streamId,
-            IConfigWatcher configWatcher)
-            : base(requestStream, responseStream, string.Empty, streamId, configWatcher)
+            IConfigWatcher configWatcher,
+            IEnumerable<IDiscoveryServerCallbacks> callbacks)
+            : base(requestStream, responseStream, string.Empty, streamId, configWatcher, callbacks)
         {
         }
 
