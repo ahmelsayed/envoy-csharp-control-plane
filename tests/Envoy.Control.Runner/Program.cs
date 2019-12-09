@@ -12,14 +12,13 @@ namespace Envoy.Control.Runner
         public static void Main(string[] args)
         {
             // First create a cache object to hold the envoy configuration cache
-            // the cache requires a "hash" callback. It'll give you an envoy Node, and expects an Id.
+            // the cache requires a node hash callback. It'll give you an envoy Node, and expects an Id.
             // this hard codes the id to "key", but it will change later on.
             var cache = new SimpleCache<string>(_ => "key");
 
             // set a config snapshot for nodes with id hash: "key"
             // You can see what the config snapshot is like in the Data folder
             // This particular snapshot tells envoy to listen on localhost:20000
-            // and forward all traffic to www.bbc.com
             var cluster1 = Data.CreateCluster("app1", new[] { ("localhost", 8080) });
             var listener1 = Data.CreateListener("listener1", "0.0.0.0", 2020, cluster1.Name);
 
