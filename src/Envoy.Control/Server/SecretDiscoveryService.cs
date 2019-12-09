@@ -12,7 +12,7 @@ namespace Envoy.Control.Server
 
         public SecretDiscoveryService(IDiscoveryStreamHandler streamHandler)
         {
-            this._streamHandler = streamHandler;
+            _streamHandler = streamHandler;
         }
 
         public override async Task StreamSecrets(
@@ -20,7 +20,7 @@ namespace Envoy.Control.Server
             IServerStreamWriter<DiscoveryResponse> responseStream,
             ServerCallContext context)
         {
-            await this._streamHandler.HandleXdsStreams(requestStream, responseStream, Resources.SECRET_TYPE_URL);
+            await _streamHandler.HandleXdsStreams(requestStream, responseStream, Resources.SECRET_TYPE_URL);
         }
     }
 }

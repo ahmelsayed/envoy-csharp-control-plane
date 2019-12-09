@@ -10,7 +10,7 @@ namespace Envoy.Control.Server
 
         public AggregatedDiscoveryService(IDiscoveryStreamHandler streamHandler)
         {
-            this._streamHandler = streamHandler;
+            _streamHandler = streamHandler;
         }
 
         public override async Task StreamAggregatedResources(
@@ -18,7 +18,7 @@ namespace Envoy.Control.Server
             IServerStreamWriter<DiscoveryResponse> responseStream,
             ServerCallContext context)
         {
-            await this._streamHandler.HandleAdsStreams(requestStream, responseStream);
+            await _streamHandler.HandleAdsStreams(requestStream, responseStream);
         }
     }
 }

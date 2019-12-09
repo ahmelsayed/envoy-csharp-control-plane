@@ -33,13 +33,13 @@ namespace Envoy.Control.Server
 
         public override void Cancel()
         {
-            foreach (var watch in this._watches.Values)
+            foreach (var watch in _watches.Values)
                 watch.Cancel();
         }
 
         public override void ComputeWatch(string typeUrl, Func<Watch> watchCreator)
         {
-            this._watches.AddOrUpdate(typeUrl, _ => watchCreator(), (_, w) =>
+            _watches.AddOrUpdate(typeUrl, _ => watchCreator(), (_, w) =>
             {
                 w.Cancel();
                 return watchCreator();
@@ -47,15 +47,15 @@ namespace Envoy.Control.Server
         }
 
         public override ISet<string>? GetAckedResources(string typeUrl)
-            => this._ackedResources.GetValueOrDefault(typeUrl, emptyHashSet);
+            => _ackedResources.GetValueOrDefault(typeUrl, emptyHashSet);
 
         public override DiscoveryResponse? GetLatestResponse(string typeUrl)
-            => this._latestResponse.GetValueOrDefault(typeUrl, null);
+            => _latestResponse.GetValueOrDefault(typeUrl, null);
 
         public override void SetAckedResources(string typeUrl, ISet<string> resources)
-            => this._ackedResources.AddOrUpdate(typeUrl, _ => resources, (_, __) => resources);
+            => _ackedResources.AddOrUpdate(typeUrl, _ => resources, (_, __) => resources);
 
         public override void SetLatestResponse(string typeUrl, DiscoveryResponse response)
-            => this._latestResponse.AddOrUpdate(typeUrl, _ => response, (_, __) => response);
+            => _latestResponse.AddOrUpdate(typeUrl, _ => response, (_, __) => response);
     }
 }

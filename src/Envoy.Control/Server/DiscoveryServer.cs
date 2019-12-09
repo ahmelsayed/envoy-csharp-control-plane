@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Envoy.Control.Cache;
@@ -16,98 +17,85 @@ using Microsoft.Extensions.Logging;
 
 namespace Envoy.Control.Server
 {
-    public class DiscoveryServer : IDisposable
+    public class DiscoveryServerBuilder
     {
-        public const string ANY_TYPE_URL = "";
+        private const int DefaultPort = 5000;
         readonly IConfigWatcher _configWatcher;
-        private readonly IEnumerable<IDiscoveryServerCallbacks> _callbacks;
+        private readonly int _port;
+        private readonly IImmutableList<IDiscoveryServerCallbacks> _callbacks;
         private IHost? _host = null;
+        private Action<ILoggingBuilder>? _loggingAction;
         private readonly object _lock = new object();
-        private readonly IDictionary<string, Action<IEndpointRouteBuilder>> _enabledServices
-            = new Dictionary<string, Action<IEndpointRouteBuilder>>();
+        private readonly IList<Action<IEndpointRouteBuilder>> _enabledServices = new List<Action<IEndpointRouteBuilder>>();
 
-        public DiscoveryServer(IConfigWatcher configWatcher)
-            : this(Enumerable.Empty<IDiscoveryServerCallbacks>(), configWatcher)
-        { }
+        public static DiscoveryServerBuilder CreateFor(IConfigWatcher configWatcher, int port = DefaultPort)
+            => CreateFor(configWatcher, Enumerable.Empty<IDiscoveryServerCallbacks>(), port);
 
-        public DiscoveryServer(IDiscoveryServerCallbacks callbacks, IConfigWatcher configWatcher)
-            : this(new[] { callbacks }, configWatcher)
-        { }
+        public static DiscoveryServerBuilder CreateFor(IConfigWatcher configWatcher, IDiscoveryServerCallbacks callbacks, int port = DefaultPort)
+            => CreateFor(configWatcher, new[] { callbacks }, port);
 
-        public DiscoveryServer(IEnumerable<IDiscoveryServerCallbacks> callbacks, IConfigWatcher configWatcher)
+        public static DiscoveryServerBuilder CreateFor(IConfigWatcher configWatcher, IEnumerable<IDiscoveryServerCallbacks> callbacks, int port = DefaultPort)
         {
             if (configWatcher == null)
             {
-                throw new ArgumentNullException($"{nameof(configWatcher)} cannot be null");
+                throw new ArgumentNullException($"{nameof(callbacks)} cannot be null when creating a {nameof(DiscoveryServerBuilder)}");
             }
 
-            this._configWatcher = configWatcher;
-            this._callbacks = callbacks.ToImmutableArray();
+            if (callbacks == null)
+            {
+                throw new ArgumentNullException($"{nameof(callbacks)} cannot be null when creating a {nameof(DiscoveryServerBuilder)}");
+            }
+
+            return new DiscoveryServerBuilder(configWatcher, callbacks, port);
         }
 
-        public DiscoveryServer UseAggregatedDiscoveryService(Action<IEndpointRouteBuilder>? action = null)
+        private DiscoveryServerBuilder(IConfigWatcher configWatcher, IEnumerable<IDiscoveryServerCallbacks> callbacks, int port)
         {
-            action = action ?? (e => e.MapGrpcService<AggregatedDiscoveryService>());
-            this._enabledServices[nameof(AggregatedDiscoveryService)] = action;
+            _configWatcher = configWatcher;
+            _callbacks = callbacks.ToImmutableList();
+            _port = port;
+        }
+
+        public DiscoveryServerBuilder ConfigureDiscoveryService<T>() where T : class
+        {
+            _enabledServices.Add(e => e.MapGrpcService<T>());
             return this;
         }
 
-        public DiscoveryServer UseClusterDiscoveryService(Action<IEndpointRouteBuilder>? action = null)
+        public DiscoveryServerBuilder ConfigureLogging(Action<ILoggingBuilder> action)
         {
-            action = action ?? (e => e.MapGrpcService<ClusterDiscoveryService>());
-            this._enabledServices[nameof(ClusterDiscoveryService)] = action;
+            _loggingAction = action;
             return this;
         }
 
-        public DiscoveryServer UseEndpointDiscoveryService(Action<IEndpointRouteBuilder>? action = null)
-        {
-            action = action ?? (e => e.MapGrpcService<EndpointDiscoveryService>());
-            this._enabledServices[nameof(EndpointDiscoveryService)] = action;
-            return this;
-        }
-
-        public DiscoveryServer UseListenerDiscoveryService(Action<IEndpointRouteBuilder>? action = null)
-        {
-            action = action ?? (e => e.MapGrpcService<ListenerDiscoveryService>());
-            this._enabledServices[nameof(ListenerDiscoveryService)] = action;
-            return this;
-        }
-
-        public DiscoveryServer UseRouteDiscoveryService(Action<IEndpointRouteBuilder>? action = null)
-        {
-            action = action ?? (e => e.MapGrpcService<RouteDiscoveryService>());
-            this._enabledServices[nameof(RouteDiscoveryService)] = action;
-            return this;
-        }
-
-        public DiscoveryServer UseSecretDiscoveryService(Action<IEndpointRouteBuilder>? action = null)
-        {
-            action = action ?? (e => e.MapGrpcService<SecretDiscoveryService>());
-            this._enabledServices[nameof(SecretDiscoveryService)] = action;
-            return this;
-        }
-
-        private IHost CreateHost()
+        public IHost Build()
         {
             return Host.CreateDefaultBuilder()
             .ConfigureLogging(logging =>
             {
                 logging.ClearProviders();
-                // logging.AddConsole();
-                // logging.SetMinimumLevel(LogLevel.Debug);
+                if (_loggingAction != null)
+                {
+                    DiscoveryServerLoggerFactory.SetLoggerFactory(LoggerFactory.Create(builder => _loggingAction(builder)));
+                }
+                logging.AddProvider(new DiscoveryLoggerProvider());
             })
             .ConfigureServices(services =>
             {
-                services.AddSingleton<IConfigWatcher>(this._configWatcher);
-                services.AddSingleton<IEnumerable<IDiscoveryServerCallbacks>>(this._callbacks);
-                services.AddSingleton<IDiscoveryStreamHandler, DiscoveryStreamHandler>();
+                services.AddSingleton<IDiscoveryStreamHandler>(new DiscoveryStreamHandler(_configWatcher, _callbacks));
                 services.AddGrpc();
             })
             .ConfigureWebHostDefaults(webBuilder =>
             {
                 webBuilder
-                    .ConfigureKestrel(k => k.ListenLocalhost(5000, options => options.Protocols = HttpProtocols.Http2))
-                    // .UseUrls("https://+:6000", "http://+:6001")
+                    .ConfigureKestrel(k =>
+                    {
+                        k.ListenAnyIP(_port, options =>
+                        {
+                            options.Protocols = HttpProtocols.Http2;
+                            options.UseHttps();
+                        });
+                    })
                     .Configure((app) =>
                     {
                         var env = app.ApplicationServices.GetRequiredService<IWebHostEnvironment>();
@@ -119,7 +107,7 @@ namespace Envoy.Control.Server
                         app.UseRouting();
                         app.UseEndpoints(endpoints =>
                         {
-                            foreach (var action in this._enabledServices.Values)
+                            foreach (var action in _enabledServices)
                             {
                                 action(endpoints);
                             }
@@ -132,60 +120,6 @@ namespace Envoy.Control.Server
                     });
             })
             .Build();
-        }
-
-        public Task RunAsync(CancellationToken token = default)
-        {
-            if (_host == null)
-            {
-                lock (_lock)
-                {
-                    if (_host == null)
-                    {
-                        _host = CreateHost();
-                        return _host.RunAsync(token);
-                    }
-                }
-            }
-            throw new InvalidOperationException("Host is already running");
-        }
-        public Task StartAsync(CancellationToken token = default)
-        {
-            if (_host == null)
-            {
-                lock (_lock)
-                {
-                    if (_host == null)
-                    {
-                        _host = CreateHost();
-                        return _host.StartAsync(token);
-                    }
-                }
-            }
-            throw new InvalidOperationException("Host is already running");
-        }
-
-        public Task StopAsync(CancellationToken token = default)
-        {
-            if (_host != null)
-            {
-                return _host.StopAsync(token);
-            }
-            return Task.CompletedTask;
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (disposing && _host != null)
-            {
-                _host.Dispose();
-            }
         }
     }
 }

@@ -52,8 +52,11 @@ namespace Envoy.Control.Server.Tests
         public async Task TestAggregatedHandler()
         {
             var configWatcher = new MockConfigWatcher(false, CreateResponses());
-            using var server = new DiscoveryServer(configWatcher);
-            server.UseAggregatedDiscoveryService();
+            using var server = DiscoveryServerBuilder
+                .CreateFor(configWatcher)
+                .ConfigureDiscoveryService<AggregatedDiscoveryService>()
+                .Build();
+
             await server.StartAsync();
 
             var client = new AggregatedDiscoveryServiceClient(CreateGrpcChannel());
@@ -122,13 +125,14 @@ namespace Envoy.Control.Server.Tests
         public async Task TestSeparateHandlers()
         {
             var configWatcher = new MockConfigWatcher(false, CreateResponses());
-            using var server = new DiscoveryServer(configWatcher);
-            server
-                .UseClusterDiscoveryService()
-                .UseEndpointDiscoveryService()
-                .UseListenerDiscoveryService()
-                .UseRouteDiscoveryService()
-                .UseSecretDiscoveryService();
+            using var server = DiscoveryServerBuilder
+                .CreateFor(configWatcher)
+                .ConfigureDiscoveryService<ClusterDiscoveryService>()
+                .ConfigureDiscoveryService<EndpointDiscoveryService>()
+                .ConfigureDiscoveryService<ListenerDiscoveryService>()
+                .ConfigureDiscoveryService<RouteDiscoveryService>()
+                .ConfigureDiscoveryService<SecretDiscoveryService>()
+                .Build();
             await server.StartAsync();
 
             var channel = CreateGrpcChannel();
@@ -199,8 +203,10 @@ namespace Envoy.Control.Server.Tests
         public async Task TestWatchClosed()
         {
             var configWatcher = new MockConfigWatcher(true, new Dictionary<string, (string, IEnumerable<IMessage>)>());
-            using var server = new DiscoveryServer(configWatcher);
-            server.UseAggregatedDiscoveryService();
+            using var server = DiscoveryServerBuilder
+                .CreateFor(configWatcher)
+                .ConfigureDiscoveryService<AggregatedDiscoveryService>()
+                .Build();
             await server.StartAsync();
 
             var client = new AggregatedDiscoveryServiceClient(CreateGrpcChannel());
@@ -230,8 +236,10 @@ namespace Envoy.Control.Server.Tests
         public async Task TestSendError()
         {
             var configWatcher = new MockConfigWatcher(false, CreateResponses());
-            using var server = new DiscoveryServer(configWatcher);
-            server.UseAggregatedDiscoveryService();
+            using var server = DiscoveryServerBuilder
+                .CreateFor(configWatcher)
+                .ConfigureDiscoveryService<AggregatedDiscoveryService>()
+                .Build();
             await server.StartAsync();
 
             var client = new AggregatedDiscoveryServiceClient(CreateGrpcChannel());
@@ -259,8 +267,10 @@ namespace Envoy.Control.Server.Tests
         public async Task TestStaleNonce()
         {
             var configWatcher = new MockConfigWatcher(false, CreateResponses());
-            using var server = new DiscoveryServer(configWatcher);
-            server.UseAggregatedDiscoveryService();
+            using var server = DiscoveryServerBuilder
+                .CreateFor(configWatcher)
+                .ConfigureDiscoveryService<AggregatedDiscoveryService>()
+                .Build();
             await server.StartAsync();
 
             var client = new AggregatedDiscoveryServiceClient(CreateGrpcChannel());
@@ -307,8 +317,10 @@ namespace Envoy.Control.Server.Tests
         public async Task TestAggregateHandlerDefaultRequestType()
         {
             var configWatcher = new MockConfigWatcher(true, new Dictionary<string, (string, IEnumerable<IMessage>)>());
-            using var server = new DiscoveryServer(configWatcher);
-            server.UseAggregatedDiscoveryService();
+            using var server = DiscoveryServerBuilder
+                .CreateFor(configWatcher)
+                .ConfigureDiscoveryService<AggregatedDiscoveryService>()
+                .Build();
             await server.StartAsync();
 
             var client = new AggregatedDiscoveryServiceClient(CreateGrpcChannel());
@@ -329,13 +341,14 @@ namespace Envoy.Control.Server.Tests
         public async Task TestSeparateHandlersDefaultRequestType()
         {
             var configWatcher = new MockConfigWatcher(false, CreateResponses());
-            using var server = new DiscoveryServer(configWatcher);
-            server
-                .UseClusterDiscoveryService()
-                .UseEndpointDiscoveryService()
-                .UseListenerDiscoveryService()
-                .UseRouteDiscoveryService()
-                .UseSecretDiscoveryService();
+            using var server = DiscoveryServerBuilder
+                .CreateFor(configWatcher)
+                .ConfigureDiscoveryService<ClusterDiscoveryService>()
+                .ConfigureDiscoveryService<EndpointDiscoveryService>()
+                .ConfigureDiscoveryService<ListenerDiscoveryService>()
+                .ConfigureDiscoveryService<RouteDiscoveryService>()
+                .ConfigureDiscoveryService<SecretDiscoveryService>()
+                .Build();
             await server.StartAsync();
 
             var channel = CreateGrpcChannel();
@@ -400,9 +413,9 @@ namespace Envoy.Control.Server.Tests
 
             void ValidateTypeUrl(string typeUrl, string caller)
             {
-                if (typeUrl != DiscoveryServer.ANY_TYPE_URL)
+                if (typeUrl != Resources.ANY_TYPE_URL)
                 {
-                    assertionErrors.Add($"{caller}#typeUrl => expected {DiscoveryServer.ANY_TYPE_URL}, got {typeUrl}");
+                    assertionErrors.Add($"{caller}#typeUrl => expected {Resources.ANY_TYPE_URL}, got {typeUrl}");
                 }
             }
 
@@ -432,8 +445,10 @@ namespace Envoy.Control.Server.Tests
 
 
             var configWatcher = new MockConfigWatcher(false, CreateResponses());
-            using var server = new DiscoveryServer(callbacks, configWatcher);
-            server.UseAggregatedDiscoveryService();
+            using var server = DiscoveryServerBuilder
+                .CreateFor(configWatcher, callbacks)
+                .ConfigureDiscoveryService<AggregatedDiscoveryService>()
+                .Build();
             await server.StartAsync();
 
             var client = new AggregatedDiscoveryServiceClient(CreateGrpcChannel());
@@ -572,7 +587,7 @@ namespace Envoy.Control.Server.Tests
             {
                 if (!Resources.TYPE_URLS.Contains(typeUrl))
                 {
-                    assertionErrors.Add($"{caller}#typeUrl => expected {DiscoveryServer.ANY_TYPE_URL}, got {typeUrl}");
+                    assertionErrors.Add($"{caller}#typeUrl => expected {Resources.ANY_TYPE_URL}, got {typeUrl}");
                 }
             }
 
@@ -603,13 +618,14 @@ namespace Envoy.Control.Server.Tests
                 .Do(args => Interlocked.Increment(ref streamResponses[args.ArgAt<DiscoveryRequest>(1).TypeUrl].Value));
 
             var configWatcher = new MockConfigWatcher(false, CreateResponses());
-            using var server = new DiscoveryServer(callbacks, configWatcher);
-            server
-                .UseClusterDiscoveryService()
-                .UseEndpointDiscoveryService()
-                .UseListenerDiscoveryService()
-                .UseRouteDiscoveryService()
-                .UseSecretDiscoveryService();
+            using var server = DiscoveryServerBuilder
+                .CreateFor(configWatcher, callbacks)
+                .ConfigureDiscoveryService<ClusterDiscoveryService>()
+                .ConfigureDiscoveryService<EndpointDiscoveryService>()
+                .ConfigureDiscoveryService<ListenerDiscoveryService>()
+                .ConfigureDiscoveryService<RouteDiscoveryService>()
+                .ConfigureDiscoveryService<SecretDiscoveryService>()
+                .Build();
             await server.StartAsync();
 
             var channel = CreateGrpcChannel();
@@ -687,8 +703,10 @@ namespace Envoy.Control.Server.Tests
                 .Do(_ => Interlocked.Increment(ref streamClosesWithErrors));
 
             var configWatcher = new MockConfigWatcher(false, CreateResponses());
-            using var server = new DiscoveryServer(callbacks, configWatcher);
-            server.UseAggregatedDiscoveryService();
+            using var server = DiscoveryServerBuilder
+                .CreateFor(configWatcher, callbacks)
+                .ConfigureDiscoveryService<AggregatedDiscoveryService>()
+                .Build();
 
             await server.StartAsync();
 
@@ -781,7 +799,7 @@ namespace Envoy.Control.Server.Tests
         }
 
 
-        private GrpcChannel CreateGrpcChannel(string host = "localhost", int port = 6000, bool useHttps = true)
+        private GrpcChannel CreateGrpcChannel(string host = "localhost", int port = 5000, bool useHttps = true)
         {
             var httpClientHandler = new HttpClientHandler();
             // Return `true` to allow certificates that are untrusted/invalid

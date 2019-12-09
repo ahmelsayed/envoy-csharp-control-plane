@@ -23,7 +23,7 @@ namespace Envoy.Control.Cache
         {
             if (Interlocked.Exchange(ref isCancelled, 1) == 0)
             {
-                this._stop?.Invoke();
+                _stop?.Invoke();
             }
         }
 
@@ -41,7 +41,7 @@ namespace Envoy.Control.Cache
 
         public void SetStop(Action stop)
         {
-            this._stop = stop;
+            _stop = stop;
         }
     }
 }

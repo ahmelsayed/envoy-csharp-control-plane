@@ -7,42 +7,44 @@ using System.Threading;
 using Envoy.Api.V2;
 using Envoy.Api.V2.Core;
 using Google.Protobuf;
+using Microsoft.Extensions.Logging;
 
 namespace Envoy.Control.Cache
 {
     public class SimpleCache<T> : ISnapshotCache<T> where T : notnull
     {
+        private static readonly ILogger Logger = DiscoveryServerLoggerFactory.CreateLogger(nameof(SimpleCache<T>));
         private readonly ReaderWriterLockSlim _rwLock = new ReaderWriterLockSlim();
-        private readonly IDictionary<T, Snapshot> snapshots = new Dictionary<T, Snapshot>();
-        private readonly ConcurrentDictionary<T, CacheStatusInfo<T>> statuses = new ConcurrentDictionary<T, CacheStatusInfo<T>>();
+        private readonly IDictionary<T, Snapshot> _snapshots = new Dictionary<T, Snapshot>();
+        private readonly ConcurrentDictionary<T, CacheStatusInfo<T>> _statuses = new ConcurrentDictionary<T, CacheStatusInfo<T>>();
         private long _watchCount = 0;
-        public IEnumerable<T> Groups => this.statuses.Keys.ToImmutableHashSet();
-        private readonly Func<Node, T> hash;
+        public IEnumerable<T> Groups => _statuses.Keys.ToImmutableHashSet();
+        private readonly Func<Node, T> _hash;
 
         public SimpleCache(Func<Node, T> hash)
         {
-            this.hash = hash;
+            _hash = hash;
         }
 
         public bool ClearSnapshot(T group)
         {
-            this._rwLock.EnterWriteLock();
+            _rwLock.EnterWriteLock();
             try
             {
-                this.statuses.TryGetValue(group, out CacheStatusInfo<T>? status);
+                _statuses.TryGetValue(group, out CacheStatusInfo<T>? status);
                 if (status != null && status.NumWatches > 0)
                 {
                     // Log warning
-                    // LOGGER.warn("tried to clear snapshot for group with existing watches, group={}", group);
+                    Logger.LogWarning("tried to clear snapshot for group with existing watches, group={0}", group);
                     return false;
                 }
-                this.statuses.TryRemove(group, out CacheStatusInfo<T> _);
-                this.snapshots.Remove(group);
+                _statuses.TryRemove(group, out CacheStatusInfo<T> _);
+                _snapshots.Remove(group);
                 return true;
             }
             finally
             {
-                this._rwLock.ExitWriteLock();
+                _rwLock.ExitWriteLock();
             }
         }
 
@@ -52,17 +54,17 @@ namespace Envoy.Control.Cache
             ISet<string>? knownResourceNames,
             Action<Response> responseCallback)
         {
-            var group = this.hash(request.Node);
+            var group = _hash(request.Node);
             // even though we're modifying, we take a readLock to allow multiple watches to be created in parallel since it
             // doesn't conflict
-            this._rwLock.EnterReadLock();
+            _rwLock.EnterReadLock();
             try
             {
-                var status = this.statuses.GetOrAdd(group, g => new CacheStatusInfo<T>(group));
+                var status = _statuses.GetOrAdd(group, g => new CacheStatusInfo<T>(group));
 
                 status.SetLastWatchRequestTime(DateTimeOffset.UtcNow.Ticks);
 
-                this.snapshots.TryGetValue(group, out Snapshot? snapshot);
+                _snapshots.TryGetValue(group, out Snapshot? snapshot);
                 var version = snapshot == null
                     ? string.Empty
                     : snapshot.GetVersion(request.TypeUrl, request.ResourceNames);
@@ -90,17 +92,14 @@ namespace Envoy.Control.Cache
                 // If the requested version is up-to-date or missing a response, leave an open watch.
                 if (snapshot == null || request.VersionInfo.Equals(version))
                 {
-                    long watchId = Interlocked.Increment(ref this._watchCount);
+                    long watchId = Interlocked.Increment(ref _watchCount);
 
-                    // if (LOGGER.isDebugEnabled())
-                    // {
-                    //     LOGGER.debug("open watch {} for {}[{}] from node {} for version {}",
-                    //         watchId,
-                    //         request.getTypeUrl(),
-                    //         String.join(", ", request.getResourceNamesList()),
-                    //         group,
-                    //         request.getVersionInfo());
-                    // }
+                    Logger.LogDebug("open watch {0} for {1}[{2}] from node {3} for version {4}",
+                        watchId,
+                        request.TypeUrl,
+                        string.Join(", ", request.ResourceNames),
+                        group,
+                        request.VersionInfo);
 
                     status.SetWatch(watchId, watch);
 
@@ -114,17 +113,15 @@ namespace Envoy.Control.Cache
 
                 if (!responded)
                 {
-                    long watchId = Interlocked.Increment(ref this._watchCount);
+                    long watchId = Interlocked.Increment(ref _watchCount);
 
-                    // if (LOGGER.isDebugEnabled())
-                    // {
-                    //     LOGGER.debug("did not respond immediately, leaving open watch {} for {}[{}] from node {} for version {}",
-                    //         watchId,
-                    //         request.getTypeUrl(),
-                    //         String.join(", ", request.getResourceNamesList()),
-                    //         group,
-                    //         request.getVersionInfo());
-                    // }
+
+                    Logger.LogDebug("did not respond immediately, leaving open watch {0} for {1}[{2}] from node {3} for version {4}",
+                        watchId,
+                        request.TypeUrl,
+                        string.Join(", ", request.ResourceNames),
+                        group,
+                        request.VersionInfo);
 
                     status.SetWatch(watchId, watch);
                     watch.SetStop(() => status.RemoveWatch(watchId));
@@ -134,16 +131,16 @@ namespace Envoy.Control.Cache
             }
             finally
             {
-                this._rwLock.ExitReadLock();
+                _rwLock.ExitReadLock();
             }
         }
 
         public Snapshot? GetSnapshot(T group)
         {
-            this._rwLock.EnterReadLock();
+            _rwLock.EnterReadLock();
             try
             {
-                if (this.snapshots.TryGetValue(group, out Snapshot? snapshot))
+                if (_snapshots.TryGetValue(group, out Snapshot? snapshot))
                 {
                     return snapshot;
                 }
@@ -151,23 +148,23 @@ namespace Envoy.Control.Cache
             }
             finally
             {
-                this._rwLock.ExitReadLock();
+                _rwLock.ExitReadLock();
             }
         }
 
         public void SetSnapshot(T group, Snapshot snapshot)
         {
             CacheStatusInfo<T>? status;
-            this._rwLock.EnterWriteLock();
+            _rwLock.EnterWriteLock();
             try
             {
                 // Update the existing snapshot entry.
-                snapshots[group] = snapshot;
-                status = statuses.GetValueOrDefault(group);
+                _snapshots[group] = snapshot;
+                status = _statuses.GetValueOrDefault(group);
             }
             finally
             {
-                this._rwLock.ExitWriteLock();
+                _rwLock.ExitWriteLock();
             }
 
             if (status == null)
@@ -181,13 +178,10 @@ namespace Envoy.Control.Cache
 
                 if (!watch.Request.VersionInfo.Equals(version))
                 {
-                    // if (LOGGER.isDebugEnabled())
-                    // {
-                    //     LOGGER.debug("responding to open watch {}[{}] with new version {}",
-                    //         id,
-                    //         String.join(", ", watch.request().getResourceNamesList()),
-                    //         version);
-                    // }
+                    Logger.LogDebug("responding to open watch {0}[{1}] with new version {2}",
+                        id,
+                        string.Join(", ", watch.Request.ResourceNames),
+                        version);
 
                     this.Respond(watch, snapshot, group);
 
@@ -202,10 +196,10 @@ namespace Envoy.Control.Cache
 
         public IStatusInfo<T>? GetStatusInfo(T group)
         {
-            this._rwLock.EnterReadLock();
+            _rwLock.EnterReadLock();
             try
             {
-                if (this.statuses.TryGetValue(group, out CacheStatusInfo<T>? status))
+                if (_statuses.TryGetValue(group, out CacheStatusInfo<T>? status))
                 {
                     return status;
                 }
@@ -213,7 +207,7 @@ namespace Envoy.Control.Cache
             }
             finally
             {
-                this._rwLock.ExitReadLock();
+                _rwLock.ExitReadLock();
             }
         }
 
@@ -229,13 +223,13 @@ namespace Envoy.Control.Cache
 
                 if (missingNames.Any())
                 {
-                    // LOGGER.info(
-                    //     "not responding in ADS mode for {} from node {} at version {} for request [{}] since [{}] not in snapshot",
-                    //     watch.request().getTypeUrl(),
-                    //     group,
-                    //     snapshot.version(watch.request().getTypeUrl(), watch.request().getResourceNamesList()),
-                    //     String.join(", ", watch.request().getResourceNamesList()),
-                    //     String.join(", ", missingNames));
+                    Logger.LogInformation(
+                        "not responding in ADS mode for {0} from node {1} at version {2} for request [{3}] since [{4}] not in snapshot",
+                        watch.Request.TypeUrl,
+                        group,
+                        snapshot.GetVersion(watch.Request.TypeUrl, watch.Request.ResourceNames),
+                        string.Join(", ", watch.Request.ResourceNames),
+                        string.Join(", ", missingNames));
 
                     return false;
                 }
@@ -243,11 +237,11 @@ namespace Envoy.Control.Cache
 
             var version = snapshot.GetVersion(watch.Request.TypeUrl, watch.Request.ResourceNames);
 
-            // LOGGER.debug("responding for {} from node {} at version {} with version {}",
-            //     watch.request().getTypeUrl(),
-            //     group,
-            //     watch.request().getVersionInfo(),
-            //     version);
+            Logger.LogDebug("responding for {0} from node {1} at version {2} with version {3}",
+                watch.Request.TypeUrl,
+                group,
+                watch.Request.VersionInfo,
+                version);
 
             var response = CreateResponse(watch.Request, snapshotResources, version);
 
@@ -258,12 +252,12 @@ namespace Envoy.Control.Cache
             }
             catch (WatchCancelledException)
             {
-                // LOGGER.error(
-                //     "failed to respond for {} from node {} at version {} with version {} because watch was already cancelled",
-                //     watch.request().getTypeUrl(),
-                //     group,
-                //     watch.request().getVersionInfo(),
-                //     version);
+                Logger.LogError(
+                    "failed to respond for {0} from node {1} at version {2} with version {3} because watch was already cancelled",
+                    watch.Request.TypeUrl,
+                    group,
+                    watch.Request.VersionInfo,
+                    version);
             }
 
             return false;

@@ -7,11 +7,13 @@ using Envoy.Api.V2;
 using Envoy.Control.Cache;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
+using Microsoft.Extensions.Logging;
 
 namespace Envoy.Control.Server
 {
     internal abstract class BaseDiscoveryRequestStreamHandler
     {
+        private static readonly ILogger Logger = DiscoveryServerLoggerFactory.CreateLogger(nameof(BaseDiscoveryRequestStreamHandler));
         private readonly string _defaultTypeUrl;
         private readonly IAsyncStreamReader<DiscoveryRequest> _requestStream;
         private readonly IAsyncStreamWriter<DiscoveryResponse> _responseStream;
@@ -19,7 +21,7 @@ namespace Envoy.Control.Server
         private readonly IConfigWatcher _configWatcher;
         private readonly IEnumerable<IDiscoveryServerCallbacks> _callbacks;
         private volatile bool _isClosing = false;
-        private long streamNonce;
+        private long _streamNonce;
         private readonly AsyncLock _lock = new AsyncLock();
 
         public BaseDiscoveryRequestStreamHandler(
@@ -30,37 +32,35 @@ namespace Envoy.Control.Server
             IConfigWatcher configWatcher,
             IEnumerable<IDiscoveryServerCallbacks> callbacks)
         {
-            this._defaultTypeUrl = defaultTypeUrl;
-            this._requestStream = requestStream;
-            this._responseStream = responseStream;
-            this._streamId = streamId;
-            this._configWatcher = configWatcher;
-            this._callbacks = callbacks;
+            _defaultTypeUrl = defaultTypeUrl;
+            _requestStream = requestStream;
+            _responseStream = responseStream;
+            _streamId = streamId;
+            _configWatcher = configWatcher;
+            _callbacks = callbacks;
         }
 
         public async Task RunAsync(CancellationToken token = default)
         {
             try
             {
-                await foreach (var request in this._requestStream.ReadAllAsync(token))
+                await foreach (var request in _requestStream.ReadAllAsync(token))
                 {
                     var requestTypeUrl = string.IsNullOrEmpty(request.TypeUrl)
-                        ? this._defaultTypeUrl
+                        ? _defaultTypeUrl
                         : request.TypeUrl;
 
                     var nonce = request.ResponseNonce;
 
-                    // if (LOGGER.isDebugEnabled())
-                    // {
-                    //     LOGGER.debug("[{}] request {}[{}] with nonce {} from version {}",
-                    //         streamId,
-                    //         requestTypeUrl,
-                    //         String.join(", ", request.getResourceNamesList()),
-                    //         nonce,
-                    //         request.getVersionInfo());
-                    // }
 
-                    this._callbacks.ForEach(cb => cb.OnStreamRequest(this._streamId, request));
+                    Logger.LogDebug("[{0}] request {1}[{2}] with nonce {3} from version {4}",
+                        _streamId,
+                        requestTypeUrl,
+                        string.Join(", ", request.ResourceNames),
+                        nonce,
+                        request.VersionInfo);
+
+                    _callbacks.ForEach(cb => cb.OnStreamRequest(_streamId, request));
 
                     var latestResponse = this.GetLatestResponse(requestTypeUrl);
                     var resourceNonce = latestResponse == null ? null : latestResponse.Nonce;
@@ -76,22 +76,21 @@ namespace Envoy.Control.Server
                             this.SetAckedResources(requestTypeUrl, ackedResourcesForType);
                         }
 
-                        this.ComputeWatch(requestTypeUrl, () => this._configWatcher.CreateWatch(
+                        this.ComputeWatch(requestTypeUrl, () => _configWatcher.CreateWatch(
                             this.Ads,
                             request,
                             this.GetAckedResources(requestTypeUrl),
                             async r => await this.Send(r, requestTypeUrl)));
                     }
                 }
-                this._callbacks.ForEach(cb => cb.OnStreamClose(this._streamId, this._defaultTypeUrl));
-                this._isClosing = true;
+                _callbacks.ForEach(cb => cb.OnStreamClose(_streamId, _defaultTypeUrl));
+                _isClosing = true;
                 this.Cancel();
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
-                this._callbacks.ForEach(cb => cb.OnStreamCloseWithError(this._streamId, this._defaultTypeUrl, e));
-                this._isClosing = true;
+                _callbacks.ForEach(cb => cb.OnStreamCloseWithError(_streamId, _defaultTypeUrl, e));
+                _isClosing = true;
                 this.Cancel();
                 // log
             }
@@ -101,10 +100,9 @@ namespace Envoy.Control.Server
         {
             try
             {
-                var nonce = Interlocked.Increment(ref this.streamNonce);
+                var nonce = Interlocked.Increment(ref _streamNonce);
 
                 var resources = response.Resources.Select(Any.Pack);
-                // var resource = Any.Pack(response.Resources.First());
                 var discoveryResponse = new DiscoveryResponse
                 {
                     VersionInfo = response.Version,
@@ -113,19 +111,19 @@ namespace Envoy.Control.Server
                 };
                 discoveryResponse.Resources.Add(resources);
 
-                // LOGGER.debug("[{}] response {} with nonce {} version {}", streamId, typeUrl, nonce, response.version());
+                Logger.LogDebug("[{0}] response {1} with nonce {2} version {3}", _streamId, typeUrl, nonce, response.Version);
 
-                this._callbacks.ForEach(cb => cb.OnStreamResponse(this._streamId, response.Request, discoveryResponse));
+                _callbacks.ForEach(cb => cb.OnStreamResponse(_streamId, response.Request, discoveryResponse));
 
                 // Store the latest response *before* we send the response. This ensures that by the time the request
                 // is processed the map is guaranteed to be updated. Doing it afterwards leads to a race conditions
                 // which may see the incoming request arrive before the map is updated, failing the nonce check erroneously.
                 this.SetLatestResponse(typeUrl, discoveryResponse);
-                using (await this._lock.LockAsync())
+                using (await _lock.LockAsync())
                 {
-                    if (!this._isClosing)
+                    if (!_isClosing)
                     {
-                        await this._responseStream.WriteAsync(discoveryResponse);
+                        await _responseStream.WriteAsync(discoveryResponse);
                     }
                 }
             }

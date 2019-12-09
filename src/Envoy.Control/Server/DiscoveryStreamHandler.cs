@@ -14,13 +14,13 @@ namespace Envoy.Control.Server
     {
         private long _streamCount = 0;
         private readonly IConfigWatcher _configWatcher;
-        private readonly IEnumerable<IDiscoveryServerCallbacks> _callbacks;
+        private readonly IImmutableList<IDiscoveryServerCallbacks> _callbacks;
         private readonly ConcurrentDictionary<string, DiscoveryResponse> _latestResponse = new ConcurrentDictionary<string, DiscoveryResponse>();
 
-        public DiscoveryStreamHandler(IConfigWatcher configWatcher, IEnumerable<IDiscoveryServerCallbacks> callbacks)
+        public DiscoveryStreamHandler(IConfigWatcher configWatcher, IImmutableList<IDiscoveryServerCallbacks> callbacks)
         {
-            this._configWatcher = configWatcher;
-            this._callbacks = callbacks.ToImmutableArray();
+            _configWatcher = configWatcher;
+            _callbacks = callbacks;
         }
 
         public Task HandleXdsStreams(
@@ -40,13 +40,13 @@ namespace Envoy.Control.Server
             bool ads,
             string defaultTypeUrl)
         {
-            var streamId = Interlocked.Increment(ref this._streamCount);
+            var streamId = Interlocked.Increment(ref _streamCount);
 
-            this._callbacks.ForEach(cb => cb.OnStreamOpen(streamId, defaultTypeUrl));
+            _callbacks.ForEach(cb => cb.OnStreamOpen(streamId, defaultTypeUrl));
 
             var streamHandler = ads
-                ? new AdsDiscoveryRequestStreamHandler(requestStream, responseStream, streamId, this._configWatcher, this._callbacks)
-                : new XdsDiscoveryRequestStreamHandler(requestStream, responseStream, defaultTypeUrl, streamId, this._configWatcher, this._callbacks) as BaseDiscoveryRequestStreamHandler;
+                ? new AdsDiscoveryRequestStreamHandler(requestStream, responseStream, streamId, _configWatcher, _callbacks)
+                : new XdsDiscoveryRequestStreamHandler(requestStream, responseStream, defaultTypeUrl, streamId, _configWatcher, _callbacks) as BaseDiscoveryRequestStreamHandler;
 
             await streamHandler.RunAsync();
         }

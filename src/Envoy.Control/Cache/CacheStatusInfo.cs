@@ -12,12 +12,12 @@ namespace Envoy.Control.Cache
             new ConcurrentDictionary<long, Watch>();
 
         // TODO: revisit
-        public long LastWatchRequestTime => this._lastWatchRequestTime;
+        public long LastWatchRequestTime => _lastWatchRequestTime;
         private long _lastWatchRequestTime;
 
-        public int NumWatches => this._watches.Count;
+        public int NumWatches => _watches.Count;
         public T NodeGroup { get; }
-        public IImmutableSet<long> WatchIds => this._watches.Keys.ToImmutableHashSet();
+        public IImmutableSet<long> WatchIds => _watches.Keys.ToImmutableHashSet();
 
         public CacheStatusInfo(T nodeGroup)
         {
@@ -25,21 +25,21 @@ namespace Envoy.Control.Cache
         }
 
         public void RemoveWatch(long watchId)
-            => this._watches.TryRemove(watchId, out Watch _);
+            => _watches.TryRemove(watchId, out Watch _);
 
         public void SetWatch(long watchId, Watch watch)
-            => this._watches.TryAdd(watchId, watch);
+            => _watches.TryAdd(watchId, watch);
 
         public void SetLastWatchRequestTime(long ticks)
-            => Interlocked.Exchange(ref this._lastWatchRequestTime, ticks);
+            => Interlocked.Exchange(ref _lastWatchRequestTime, ticks);
 
         public void WatchesRemoveIf(Func<long, Watch, bool> filter)
         {
-            foreach (var watch in this._watches.ToArray())
+            foreach (var watch in _watches.ToArray())
             {
                 if (filter(watch.Key, watch.Value))
                 {
-                    this._watches.TryRemove(watch.Key, out Watch _);
+                    _watches.TryRemove(watch.Key, out Watch _);
                 }
             }
         }

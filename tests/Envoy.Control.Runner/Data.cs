@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Envoy.Api.V2;
 using Envoy.Api.V2.Auth;
 using Envoy.Api.V2.Core;
+using Envoy.Api.V2.Endpoint;
 using Envoy.Api.V2.ListenerNS;
 using Envoy.Api.V2.Route;
 using Envoy.Config.Filter.Network.HttpConnectionManager.V2;
@@ -18,39 +21,113 @@ namespace Envoy.Control.Runner
 {
     public static class Data
     {
-        public static Cluster CreateCluster(string name, string targetDomain)
+        public static Cluster CreateCluster(string name, IEnumerable<(string address, int port)> endpoints)
         {
-            var address = new Address
-            {
-                SocketAddress = new SocketAddress
-                {
-                    Address = targetDomain,
-                    Protocol = Protocol.Tcp,
-                    PortValue = 443,
-                }
-            };
-
-            var cluster = new Cluster
+            return new Cluster
             {
                 Name = name,
                 ConnectTimeout = Duration.FromTimeSpan(TimeSpan.FromSeconds(5)),
                 Type = DiscoveryType.LogicalDns,
                 DnsLookupFamily = DnsLookupFamily.V4Only,
                 LbPolicy = LbPolicy.RoundRobin,
-                TlsContext = new UpstreamTlsContext
-                {
-                    Sni = targetDomain
-                }
+                LoadAssignment = CreateLoadAssignment(name, endpoints)
             };
-            cluster.Hosts.Add(address);
-            return cluster;
         }
 
-        public static Listener CreateListener(string name, string clusterName, string targetDomain)
+        private static ClusterLoadAssignment CreateLoadAssignment(string name, IEnumerable<(string address, int port)> endpoints)
+        {
+            var localityLbEndpoints = new LocalityLbEndpoints();
+            localityLbEndpoints.LbEndpoints.AddRange(endpoints.Select(e => new LbEndpoint
+            {
+                Endpoint = new Endpoint
+                {
+                    Address = new Address
+                    {
+                        SocketAddress = new SocketAddress
+                        {
+                            Address = e.address,
+                            Protocol = Protocol.Tcp,
+                            PortValue = (uint)e.port,
+                        }
+                    }
+                }
+            }));
+            var cla = new ClusterLoadAssignment
+            {
+                ClusterName = name,
+            };
+            cla.Endpoints.Add(localityLbEndpoints);
+            return cla;
+        }
+
+        static int versions = 0;
+        internal static Snapshot CreateSnapshot(Cluster cluster, Listener listener)
+        {
+            return new Snapshot(
+                new[] { cluster },
+                Enumerable.Empty<ClusterLoadAssignment>(),
+                new[] { listener },
+                Enumerable.Empty<RouteConfiguration>(),
+                Enumerable.Empty<Secret>(),
+                Interlocked.Increment(ref versions).ToString()
+            );
+        }
+
+        public static Listener CreateListener(string name, string address, int port, string clusterName)
+        {
+
+            var listener = new Listener
+            {
+                Name = $"listener_{name}",
+                Address = new Address
+                {
+                    SocketAddress = new SocketAddress
+                    {
+                        Protocol = Protocol.Tcp,
+                        Address = address,
+                        PortValue = (uint)port,
+                    }
+                }
+            };
+            listener.FilterChains.Add(CreateFilterChain(name, clusterName));
+            return listener;
+        }
+
+        private static FilterChain CreateFilterChain(string name, string clusterName)
+        {
+            var filterChain = new FilterChain();
+            filterChain.Filters.Add(new Filter
+            {
+                Name = "envoy.http_connection_manager",
+                TypedConfig = Any.Pack(CreateHttpConnectionManager(name, clusterName)),
+            });
+            return filterChain;
+        }
+
+        private static HttpConnectionManager CreateHttpConnectionManager(string name, string clusterName)
+        {
+            var manager = new HttpConnectionManager
+            {
+                CodecType = CodecType.Auto,
+                StatPrefix = "ingress",
+                RouteConfig = new RouteConfiguration
+                {
+                    Name = $"{name}_route",
+                },
+            };
+            manager.RouteConfig.VirtualHosts.Add(CreateVirtualHost(name, "*", clusterName));
+            manager.HttpFilters.Add(new HttpFilter
+            {
+                Name = "envoy.router"
+            });
+            return manager;
+        }
+
+        private static VirtualHost CreateVirtualHost(string name, string domain, string clusterName)
         {
             var virtualHost = new VirtualHost
             {
-                Name = $"local_{name}_virtualhost",
+                Name = $"{name}_virtualhost",
             };
             virtualHost.Domains.Add("*");
             virtualHost.Routes.Add(new Route
@@ -65,239 +142,10 @@ namespace Envoy.Control.Runner
                 },
                 Route_ = new RouteAction
                 {
-                    HostRewrite = targetDomain,
                     Cluster = clusterName,
                 },
             });
-
-            var manager = new HttpConnectionManager
-            {
-                CodecType = CodecType.Auto,
-                StatPrefix = "ingress",
-                RouteConfig = new RouteConfiguration
-                {
-                    Name = $"local_{name}_route",
-                },
-            };
-            manager.RouteConfig.VirtualHosts.Add(virtualHost);
-            manager.HttpFilters.Add(new HttpFilter
-            {
-                Name = "envoy.router"
-            });
-
-            var listener = new Listener
-            {
-                Name = $"listener_{name}",
-                Address = new Address
-                {
-                    SocketAddress = new SocketAddress
-                    {
-                        Protocol = Protocol.Tcp,
-                        Address = "127.0.0.1",
-                        PortValue = 20000,
-                    }
-                }
-            };
-            var filterChain = new FilterChain();
-            filterChain.Filters.Add(new Filter
-            {
-                Name = "envoy.http_connection_manager",
-                TypedConfig = Any.Pack(manager),
-            });
-            listener.FilterChains.Add(filterChain);
-            return listener;
-        }
-
-        public static Snapshot BBCSnapshot
-        {
-            get
-            {
-                var address = new Address
-                {
-                    SocketAddress = new SocketAddress
-                    {
-                        Address = "www.bbc.com",
-                        Protocol = Protocol.Tcp,
-                        PortValue = 443,
-                    }
-                };
-
-                var cluster = new Cluster
-                {
-                    Name = "bbc0",
-                    ConnectTimeout = Duration.FromTimeSpan(TimeSpan.FromSeconds(5)),
-                    Type = DiscoveryType.LogicalDns,
-                    DnsLookupFamily = DnsLookupFamily.V4Only,
-                    LbPolicy = LbPolicy.RoundRobin,
-                    TlsContext = new UpstreamTlsContext
-                    {
-                        Sni = "www.bbc.com"
-                    }
-                };
-                cluster.Hosts.Add(address);
-
-                var virtualHost = new VirtualHost
-                {
-                    Name = "local_bbc_service",
-                };
-                virtualHost.Domains.Add("*");
-                virtualHost.Routes.Add(new Route
-                {
-                    Match = new RouteMatch
-                    {
-                        SafeRegex = new RegexMatcher
-                        {
-                            Regex = "/*",
-                            GoogleRe2 = new GoogleRE2()
-                        },
-                    },
-                    Route_ = new RouteAction
-                    {
-                        HostRewrite = "www.bbc.com",
-                        Cluster = cluster.Name,
-                    },
-                });
-
-                var manager = new HttpConnectionManager
-                {
-                    CodecType = CodecType.Auto,
-                    StatPrefix = "ingress",
-                    RouteConfig = new RouteConfiguration
-                    {
-                        Name = "local_bbc_route",
-                    },
-                };
-                manager.RouteConfig.VirtualHosts.Add(virtualHost);
-                manager.HttpFilters.Add(new HttpFilter
-                {
-                    Name = "envoy.router"
-                });
-
-                var listener = new Listener
-                {
-                    Name = "listener_bbc_0",
-                    Address = new Address
-                    {
-                        SocketAddress = new SocketAddress
-                        {
-                            Protocol = Protocol.Tcp,
-                            Address = "127.0.0.1",
-                            PortValue = 20000,
-                        }
-                    }
-                };
-                var filterChain = new FilterChain();
-                filterChain.Filters.Add(new Filter
-                {
-                    Name = "envoy.http_connection_manager",
-                    TypedConfig = Any.Pack(manager),
-                });
-                listener.FilterChains.Add(filterChain);
-
-                return new Snapshot(
-                    new[] { cluster },
-                    Enumerable.Empty<ClusterLoadAssignment>(),
-                    new[] { listener },
-                    Enumerable.Empty<RouteConfiguration>(),
-                    Enumerable.Empty<Secret>(),
-                    "1");
-            }
-        }
-
-        public static Snapshot CNNSnapshot
-        {
-            get
-            {
-                var address = new Address
-                {
-                    SocketAddress = new SocketAddress
-                    {
-                        Address = "www.cnn.com",
-                        Protocol = Protocol.Tcp,
-                        PortValue = 443,
-                    }
-                };
-
-                var cluster = new Cluster
-                {
-                    Name = "cnn0",
-                    ConnectTimeout = Duration.FromTimeSpan(TimeSpan.FromSeconds(5)),
-                    Type = DiscoveryType.LogicalDns,
-                    DnsLookupFamily = DnsLookupFamily.V4Only,
-                    LbPolicy = LbPolicy.RoundRobin,
-                    TlsContext = new UpstreamTlsContext
-                    {
-                        Sni = "www.cnn.com"
-                    }
-                };
-                cluster.Hosts.Add(address);
-
-                var virtualHost = new VirtualHost
-                {
-                    Name = "local_cnn_service",
-                };
-                virtualHost.Domains.Add("*");
-                virtualHost.Routes.Add(new Route
-                {
-                    Match = new RouteMatch
-                    {
-                        SafeRegex = new RegexMatcher
-                        {
-                            Regex = "/*",
-                            GoogleRe2 = new GoogleRE2()
-                        },
-                    },
-                    Route_ = new RouteAction
-                    {
-                        HostRewrite = "www.cnn.com",
-                        Cluster = cluster.Name,
-                    },
-                });
-
-                var manager = new HttpConnectionManager
-                {
-                    CodecType = CodecType.Auto,
-                    StatPrefix = "ingress",
-                    RouteConfig = new RouteConfiguration
-                    {
-                        Name = "local_google_route",
-                    },
-                };
-                manager.RouteConfig.VirtualHosts.Add(virtualHost);
-                manager.HttpFilters.Add(new HttpFilter
-                {
-                    Name = "envoy.router"
-                });
-
-                var listener = new Listener
-                {
-                    Name = "listener_cnn_0",
-                    Address = new Address
-                    {
-                        SocketAddress = new SocketAddress
-                        {
-                            Protocol = Protocol.Tcp,
-                            Address = "127.0.0.1",
-                            PortValue = 20000,
-                        }
-                    }
-                };
-                var filterChain = new FilterChain();
-                filterChain.Filters.Add(new Filter
-                {
-                    Name = "envoy.http_connection_manager",
-                    TypedConfig = Any.Pack(manager),
-                });
-                listener.FilterChains.Add(filterChain);
-
-                return new Snapshot(
-                    new[] { cluster },
-                    Enumerable.Empty<ClusterLoadAssignment>(),
-                    new[] { listener },
-                    Enumerable.Empty<RouteConfiguration>(),
-                    Enumerable.Empty<Secret>(),
-                    "2");
-            }
+            return virtualHost;
         }
     }
 }

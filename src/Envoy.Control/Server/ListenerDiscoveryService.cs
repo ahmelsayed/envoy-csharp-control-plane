@@ -11,7 +11,7 @@ namespace Envoy.Control.Server
 
         public ListenerDiscoveryService(IDiscoveryStreamHandler streamHandler)
         {
-            this._streamHandler = streamHandler;
+            _streamHandler = streamHandler;
         }
 
         public override async Task StreamListeners(
@@ -19,7 +19,7 @@ namespace Envoy.Control.Server
             IServerStreamWriter<DiscoveryResponse> responseStream,
             ServerCallContext context)
         {
-            await this._streamHandler.HandleXdsStreams(requestStream, responseStream, Resources.LISTENER_TYPE_URL);
+            await _streamHandler.HandleXdsStreams(requestStream, responseStream, Resources.LISTENER_TYPE_URL);
         }
     }
 }

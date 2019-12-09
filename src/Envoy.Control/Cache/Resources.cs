@@ -7,15 +7,16 @@ using Envoy.Api.V2.ListenerNS;
 using Envoy.Config.Filter.Network.HttpConnectionManager.V2;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
+using Microsoft.Extensions.Logging;
 
 namespace Envoy.Control.Cache
 {
     public class Resources
     {
-        // private static readonly Logger LOGGER = LoggerFactory.getLogger(Resources.class);
+        private static readonly ILogger Logger = DiscoveryServerLoggerFactory.CreateLogger(nameof(Resources));
 
         private const string TYPE_URL_PREFIX = "type.googleapis.com/envoy.api.v2.";
-
+        public const string ANY_TYPE_URL = "";
         public const string FILTER_ENVOY_ROUTER = "envoy.router";
         public const string FILTER_HTTP_CONNECTION_MANAGER = "envoy.http_connection_manager";
         public const string CLUSTER_TYPE_URL = TYPE_URL_PREFIX + "Cluster";
@@ -160,12 +161,11 @@ namespace Envoy.Control.Cache
                                     refs.Add(config.Rds.RouteConfigName);
                                 }
                             }
-                            catch (InvalidProtocolBufferException)
+                            catch (InvalidProtocolBufferException e)
                             {
-                                // LOGGER.error(
-                                //     "Failed to convert HTTP connection manager config struct into protobuf message for listener {}",
-                                //     getResourceName(l),
-                                //     e);
+                                Logger.LogError(e,
+                                    "Failed to convert HTTP connection manager config struct into protobuf message for listener {0}",
+                                    GetResourceName(resource));
                             }
                         }
                     }

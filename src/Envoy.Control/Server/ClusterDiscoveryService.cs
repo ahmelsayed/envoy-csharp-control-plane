@@ -16,7 +16,7 @@ namespace Envoy.Control.Server
 
         public ClusterDiscoveryService(IDiscoveryStreamHandler streamHandler)
         {
-            this._streamHandler = streamHandler;
+            _streamHandler = streamHandler;
         }
 
         long ticket = 0;
@@ -25,7 +25,7 @@ namespace Envoy.Control.Server
             IServerStreamWriter<DiscoveryResponse> responseStream,
             ServerCallContext context)
         {
-            await this._streamHandler.HandleXdsStreams(requestStream, responseStream, Resources.CLUSTER_TYPE_URL);
+            await _streamHandler.HandleXdsStreams(requestStream, responseStream, Resources.CLUSTER_TYPE_URL);
         }
     }
 }
