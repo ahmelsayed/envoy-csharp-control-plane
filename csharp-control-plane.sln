@@ -15,6 +15,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "_build", "build\_build.cspr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Envoy.Control.Runner", "tests\Envoy.Control.Runner\Envoy.Control.Runner.csproj", "{C8D1BD3A-831D-4F85-AD93-EA1FFD10DEC1}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Envoy.Control.Runner.Fsharp", "tests\Envoy.Control.Runner.Fsharp\Envoy.Control.Runner.Fsharp.fsproj", "{CA54067C-5D1D-45CB-A7DC-B178D4D8426D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -66,10 +68,23 @@ Global
 		{C8D1BD3A-831D-4F85-AD93-EA1FFD10DEC1}.Release|x64.Build.0 = Release|Any CPU
 		{C8D1BD3A-831D-4F85-AD93-EA1FFD10DEC1}.Release|x86.ActiveCfg = Release|Any CPU
 		{C8D1BD3A-831D-4F85-AD93-EA1FFD10DEC1}.Release|x86.Build.0 = Release|Any CPU
+		{CA54067C-5D1D-45CB-A7DC-B178D4D8426D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CA54067C-5D1D-45CB-A7DC-B178D4D8426D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CA54067C-5D1D-45CB-A7DC-B178D4D8426D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{CA54067C-5D1D-45CB-A7DC-B178D4D8426D}.Debug|x64.Build.0 = Debug|Any CPU
+		{CA54067C-5D1D-45CB-A7DC-B178D4D8426D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{CA54067C-5D1D-45CB-A7DC-B178D4D8426D}.Debug|x86.Build.0 = Debug|Any CPU
+		{CA54067C-5D1D-45CB-A7DC-B178D4D8426D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CA54067C-5D1D-45CB-A7DC-B178D4D8426D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CA54067C-5D1D-45CB-A7DC-B178D4D8426D}.Release|x64.ActiveCfg = Release|Any CPU
+		{CA54067C-5D1D-45CB-A7DC-B178D4D8426D}.Release|x64.Build.0 = Release|Any CPU
+		{CA54067C-5D1D-45CB-A7DC-B178D4D8426D}.Release|x86.ActiveCfg = Release|Any CPU
+		{CA54067C-5D1D-45CB-A7DC-B178D4D8426D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{BE9CAA47-E5FB-4E22-B970-2D354DD67205} = {51612AC8-3FE1-4E1D-9695-D9AD20BEE1C5}
 		{AB019F47-1F1B-40FE-9F19-340C21A16584} = {C3654E95-5DFC-4B4D-BD0A-B946754B2D0C}
 		{C8D1BD3A-831D-4F85-AD93-EA1FFD10DEC1} = {C3654E95-5DFC-4B4D-BD0A-B946754B2D0C}
+		{CA54067C-5D1D-45CB-A7DC-B178D4D8426D} = {C3654E95-5DFC-4B4D-BD0A-B946754B2D0C}
 	EndGlobalSection
 EndGlobal

@@ -24,3 +24,4 @@ nCrunchTemp*
 artifacts/
 .tmp/
 src/Envoy.Control/Protos/**/*.cs
+/.ionide
