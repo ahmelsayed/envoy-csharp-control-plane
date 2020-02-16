@@ -12,15 +12,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Google.Protobuf" Version="3.11.1-rc0" />
-    <PackageReference Include="Grpc.AspNetCore" Version="2.24.0" />
-    <PackageReference Include="Grpc.AspNetCore.Server.ClientFactory" Version="2.24.0" />
-    <PackageReference Include="grpc.tools" Version="2.25.2-private">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="System.Reactive" Version="4.2.0" />
-    <PackageReference Include="System.Reactive.Linq" Version="4.2.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.11.4" />
+    <PackageReference Include="Grpc.AspNetCore" Version="2.27.0" />
   </ItemGroup>
 
   <ItemGroup>
