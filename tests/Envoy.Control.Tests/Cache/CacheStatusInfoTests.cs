@@ -12,6 +12,8 @@ namespace Envoy.Control.Cache.Tests
     public class CacheStatusInfoTests
     {
         static Random random = new Random();
+
+        [Fact]
         public void NodeGroupReturnsExpectedGroup()
         {
             var node = new Node
@@ -24,6 +26,7 @@ namespace Envoy.Control.Cache.Tests
             info.NodeGroup.Should().BeSameAs(node);
         }
 
+        [Fact]
         public void LastWatchRequestTimeReturns0IfNotSet()
         {
             var info = new CacheStatusInfo<Node>(new Node());
@@ -31,6 +34,7 @@ namespace Envoy.Control.Cache.Tests
             info.LastWatchRequestTime.Should().Be(0);
         }
 
+        [Fact]
         public void LastWatchRequestTimeReturnsExpectedValueIfSet()
         {
             long lastWatchRequestTime = random.Next(10000, 50000);
@@ -93,7 +97,7 @@ namespace Envoy.Control.Cache.Tests
         }
 
         [Theory]
-        // [InlineData(false)]
+        [InlineData(false)]
         [InlineData(true)]
         public void TestConcurrentSetWatchAndRemove(bool ads)
         {

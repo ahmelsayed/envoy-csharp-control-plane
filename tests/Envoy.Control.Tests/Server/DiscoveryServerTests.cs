@@ -338,6 +338,7 @@ namespace Envoy.Control.Server.Tests
             var (responseErrors, responses, completed, error) = await clientTask;
         }
 
+        [Fact]
         public async Task TestSeparateHandlersDefaultRequestType()
         {
             var configWatcher = new MockConfigWatcher(false, CreateResponses());
