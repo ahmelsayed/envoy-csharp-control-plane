@@ -1,9 +1,18 @@
 ﻿using System;
-using System.Threading;
+using Envoy.Api.V2.Auth;
 using Envoy.Control.Cache;
 using Envoy.Control.Server;
+using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using System.IO;
+using System.Linq;
 
 namespace Envoy.Control.Runner
 {
@@ -16,23 +25,16 @@ namespace Envoy.Control.Runner
             // this hard codes the id to "key", but it will change later on.
             var cache = new SimpleCache<string>(_ => "key");
 
-            // set a config snapshot for nodes with id hash: "key"
-            // You can see what the config snapshot is like in the Data folder
-            // This particular snapshot tells envoy to listen on localhost:20000
-            var cluster1 = Data.CreateCluster("app1", new[] { ("localhost", 8080) });
-            var listener1 = Data.CreateListener("listener1", "0.0.0.0", 2020, cluster1.Name);
-
-            var cluster2 = Data.CreateCluster("app2", new[] { ("localhost", 9090) });
-            var listener2 = Data.CreateListener("listener2", "0.0.0.0", 2020, cluster2.Name);
-
-            cache.SetSnapshot("key", Data.CreateSnapshot(cluster1, listener1));
+            cache.SetSnapshot("key", Data.CreateBaseSnapshot());
 
             // Create a DiscoveryServer and give it the cache object
             // Select the type of server. https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol
-            // This is using the ADS server
             var discoveryServer = DiscoveryServerBuilder
-                .CreateFor(cache)
-                .ConfigureDiscoveryService<AggregatedDiscoveryService>()
+                .CreateFor(cache, 6000)
+                .ConfigureDiscoveryService<ClusterDiscoveryService>()
+                .ConfigureDiscoveryService<EndpointDiscoveryService>()
+                .ConfigureDiscoveryService<RouteDiscoveryService>()
+                .ConfigureDiscoveryService<ListenerDiscoveryService>()
                 .ConfigureLogging(logging =>
                 {
                     logging.AddConsole();
@@ -40,28 +42,76 @@ namespace Envoy.Control.Runner
                 })
                 .Build();
 
-            // Run the server
-            var cts = new CancellationTokenSource();
-            discoveryServer.RunAsync(cts.Token);
+            var restServer = WebHost.CreateDefaultBuilder(args)
+                .Configure(_ => _.Run(async ctx =>
+                {
+                    var endpointRequest = await deserialize<AppEndpoint>(ctx.Response.Body);
+                    if (valid(endpointRequest)) {
+                        var result = Reconcile(cache, endpointRequest);
+                        await ctx.Response.WriteAsync(result);
+                    } else {
+                        ctx.Response.StatusCode = 400;
+                        await ctx.Response.WriteAsync("Invalid");
+                    }
 
-            int count = 0;
-            var logger = DiscoveryServerLoggerFactory.CreateLogger("main");
-            while (true)
-            {
-                logger.LogDebug("Press any key");
-                Console.ReadKey();
-                // Update the config to another config snapshot.
-                // This one tells envoy to listen on localhost:20000 and forward to www.cnn.com
-                if (count % 2 == 0)
-                {
-                    cache.SetSnapshot("key", Data.CreateSnapshot(cluster2, listener2));
-                }
-                else
-                {
-                    cache.SetSnapshot("key", Data.CreateSnapshot(cluster1, listener1));
-                }
-                count++;
-            }
+
+                    bool valid(AppEndpoint e)
+                        => !string.IsNullOrEmpty(e.Ip) &&
+                           !string.IsNullOrEmpty(e.Domain) &&
+                           !string.IsNullOrEmpty(e.Name) &&
+                           e.Port != 0;
+
+                    async Task<T> deserialize<T>(Stream stream)
+                    {
+                        var str = await new StreamReader(ctx.Request.Body).ReadToEndAsync();
+                        return JsonConvert.DeserializeObject<T>(str);
+                    }
+                }))
+                .Build();
+
+            discoveryServer.RunAsync();
+            restServer.Run();
         }
+
+        public static string Reconcile(SimpleCache<string> cache, AppEndpoint appEndpoint)
+        {
+            var snapshot = cache.GetSnapshot("key");
+            if (snapshot == null)
+            {
+                snapshot = Data.CreateBaseSnapshot();
+            }
+
+            var cluster = Data.CreateCluster(appEndpoint.Name!);
+            var clusterLoadAssignment = Data.CreateClusterLoadAssignment(cluster.Name, new[] { (appEndpoint.Ip!, appEndpoint.Port) });
+            var virtualHost = Data.CreateVirtualHost(appEndpoint.Name!, appEndpoint.Domain!, appEndpoint.Name!);
+            var route = Data.UpdateRoutes(virtualHost, snapshot.Routes.Resources.Values.FirstOrDefault());
+            var newSnapshot = new Snapshot(
+                snapshot.Clusters.Resources.Values.AddOrUpdateInPlace(cluster, (a,b) => a.Name == b.Name),
+                snapshot.Endpoints.Resources.Values.AddOrUpdateInPlace(clusterLoadAssignment, (a,b) => a.ClusterName == b.ClusterName),
+                new[] { Data.CreateHTTPListener() },
+                new[] { route },
+                Enumerable.Empty<Secret>(),
+                Guid.NewGuid().ToString()
+            );
+
+            newSnapshot.EnsureConsistent();
+            cache.SetSnapshot("key", newSnapshot);
+            return "Success";
+        }
+    }
+
+    class AppEndpoint
+    {
+        [JsonProperty(PropertyName = "name")]
+        public string? Name { get; set; }
+
+        [JsonProperty(PropertyName = "ip")]
+        public string? Ip { get; set; }
+
+        [JsonProperty(PropertyName = "port")]
+        public int Port { get; set; }
+
+        [JsonProperty(PropertyName = "domain")]
+        public string? Domain { get; set; }
     }
 }

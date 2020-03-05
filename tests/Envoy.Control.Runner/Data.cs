@@ -13,6 +13,7 @@ using Envoy.Control.Cache;
 using Envoy.Type.Matcher;
 using Google.Protobuf.WellKnownTypes;
 using static Envoy.Api.V2.Cluster.Types;
+using static Envoy.Api.V2.Core.ApiConfigSource.Types;
 using static Envoy.Api.V2.Core.SocketAddress.Types;
 using static Envoy.Config.Filter.Network.HttpConnectionManager.V2.HttpConnectionManager.Types;
 using static Envoy.Type.Matcher.RegexMatcher.Types;
@@ -21,20 +22,38 @@ namespace Envoy.Control.Runner
 {
     public static class Data
     {
-        public static Cluster CreateCluster(string name, IEnumerable<(string address, int port)> endpoints)
+        const string xdsControllerName = "envoy_controller_cluster";
+
+        public static Snapshot CreateBaseSnapshot()
         {
-            return new Cluster
+            return new Snapshot(
+                Enumerable.Empty<Cluster>(),
+                Enumerable.Empty<ClusterLoadAssignment>(),
+                new[] { CreateHTTPListener() },
+                new[] { CreateHTTPRoute() },
+                Enumerable.Empty<Secret>(),
+                Guid.NewGuid().ToString()
+            );
+        }
+
+        public static Cluster CreateCluster(string name)
+        {
+            var cluster =  new Cluster
             {
                 Name = name,
                 ConnectTimeout = Duration.FromTimeSpan(TimeSpan.FromSeconds(5)),
-                Type = DiscoveryType.LogicalDns,
-                DnsLookupFamily = DnsLookupFamily.V4Only,
+                Type = DiscoveryType.Eds,
                 LbPolicy = LbPolicy.RoundRobin,
-                LoadAssignment = CreateLoadAssignment(name, endpoints)
+                EdsClusterConfig = new EdsClusterConfig
+                {
+                    EdsConfig = GetXdsConfigSource()
+                }
             };
+
+            return cluster;
         }
 
-        private static ClusterLoadAssignment CreateLoadAssignment(string name, IEnumerable<(string address, int port)> endpoints)
+        public static ClusterLoadAssignment CreateClusterLoadAssignment(string clusterName, IEnumerable<(string address, int port)> endpoints)
         {
             var localityLbEndpoints = new LocalityLbEndpoints();
             localityLbEndpoints.LbEndpoints.AddRange(endpoints.Select(e => new LbEndpoint
@@ -54,82 +73,19 @@ namespace Envoy.Control.Runner
             }));
             var cla = new ClusterLoadAssignment
             {
-                ClusterName = name,
+                ClusterName = clusterName,
             };
             cla.Endpoints.Add(localityLbEndpoints);
             return cla;
         }
 
-        static int versions = 0;
-        internal static Snapshot CreateSnapshot(Cluster cluster, Listener listener)
-        {
-            return new Snapshot(
-                new[] { cluster },
-                Enumerable.Empty<ClusterLoadAssignment>(),
-                new[] { listener },
-                Enumerable.Empty<RouteConfiguration>(),
-                Enumerable.Empty<Secret>(),
-                Interlocked.Increment(ref versions).ToString()
-            );
-        }
-
-        public static Listener CreateListener(string name, string address, int port, string clusterName)
-        {
-
-            var listener = new Listener
-            {
-                Name = $"listener_{name}",
-                Address = new Address
-                {
-                    SocketAddress = new SocketAddress
-                    {
-                        Protocol = Protocol.Tcp,
-                        Address = address,
-                        PortValue = (uint)port,
-                    }
-                }
-            };
-            listener.FilterChains.Add(CreateFilterChain(name, clusterName));
-            return listener;
-        }
-
-        private static FilterChain CreateFilterChain(string name, string clusterName)
-        {
-            var filterChain = new FilterChain();
-            filterChain.Filters.Add(new Filter
-            {
-                Name = "envoy.http_connection_manager",
-                TypedConfig = Any.Pack(CreateHttpConnectionManager(name, clusterName)),
-            });
-            return filterChain;
-        }
-
-        private static HttpConnectionManager CreateHttpConnectionManager(string name, string clusterName)
-        {
-            var manager = new HttpConnectionManager
-            {
-                CodecType = CodecType.Auto,
-                StatPrefix = "ingress",
-                RouteConfig = new RouteConfiguration
-                {
-                    Name = $"{name}_route",
-                },
-            };
-            manager.RouteConfig.VirtualHosts.Add(CreateVirtualHost(name, "*", clusterName));
-            manager.HttpFilters.Add(new HttpFilter
-            {
-                Name = "envoy.router"
-            });
-            return manager;
-        }
-
-        private static VirtualHost CreateVirtualHost(string name, string domain, string clusterName)
+        public static VirtualHost CreateVirtualHost(string name, string domain, string clusterName)
         {
             var virtualHost = new VirtualHost
             {
-                Name = $"{name}_virtualhost",
+                Name = name,
             };
-            virtualHost.Domains.Add("*");
+            virtualHost.Domains.Add(domain);
             virtualHost.Routes.Add(new Route
             {
                 Match = new RouteMatch
@@ -146,6 +102,97 @@ namespace Envoy.Control.Runner
                 },
             });
             return virtualHost;
+        }
+
+
+        public static ConfigSource GetXdsConfigSource()
+        {
+            var configSource = new ConfigSource
+            {
+                ApiConfigSource = new ApiConfigSource
+                {
+                    ApiType = ApiType.Grpc,
+                    SetNodeOnFirstMessageOnly = true,
+                }
+            };
+            configSource
+                .ApiConfigSource
+                .GrpcServices
+                .Add(new GrpcService
+                {
+                    EnvoyGrpc = new GrpcService.Types.EnvoyGrpc
+                    {
+                        ClusterName = xdsControllerName
+                    }
+                });
+            return configSource;
+        }
+
+        internal static RouteConfiguration UpdateRoutes(VirtualHost virtualHost, RouteConfiguration existingRoute)
+        {
+            var newRoute = CreateHTTPRoute();
+            var virtualHosts = existingRoute.VirtualHosts.AddOrUpdateInPlace(virtualHost, (a, b) => a.Name == b.Name);
+            newRoute.VirtualHosts.AddRange(virtualHosts);
+            return newRoute;
+        }
+
+        public static RouteConfiguration CreateHTTPRoute()
+        {
+            return new RouteConfiguration
+            {
+                Name = "http_route"
+            };
+        }
+
+        static int versions = 0;
+        public static Listener CreateHTTPListener()
+        {
+            var listener = new Listener
+            {
+                Name = $"http_listener",
+                Address = new Address
+                {
+                    SocketAddress = new SocketAddress
+                    {
+                        Protocol = Protocol.Tcp,
+                        Address = "0.0.0.0",
+                        PortValue = 8080,
+                    }
+                }
+            };
+            listener.FilterChains.Add(CreateHTTPFilterChain("http_route"));
+            return listener;
+        }
+
+        public static FilterChain CreateHTTPFilterChain(string routeName)
+        {
+            var filterChain = new FilterChain();
+            filterChain.Filters.Add(new Filter
+            {
+                Name = "envoy.http_connection_manager",
+                TypedConfig = Any.Pack(CreateHttpConnectionManager(routeName)),
+            });
+            return filterChain;
+        }
+
+        public static HttpConnectionManager CreateHttpConnectionManager(string routeName)
+        {
+            var manager = new HttpConnectionManager
+            {
+                CodecType = CodecType.Auto,
+                StatPrefix = "ingress",
+                UseRemoteAddress = true,
+                Rds = new Rds
+                {
+                    RouteConfigName = routeName,
+                    ConfigSource =  GetXdsConfigSource()
+                }
+            };
+            manager.HttpFilters.Add(new HttpFilter
+            {
+                Name = "envoy.router"
+            });
+            return manager;
         }
     }
 }
