@@ -22,6 +22,7 @@ namespace Envoy.Control.Server
         private const int DefaultPort = 5000;
         readonly IConfigWatcher _configWatcher;
         private readonly int _port;
+        private bool _useHttps;
         private readonly IImmutableList<IDiscoveryServerCallbacks> _callbacks;
         private IHost? _host = null;
         private Action<ILoggingBuilder>? _loggingAction;
@@ -54,6 +55,7 @@ namespace Envoy.Control.Server
             _configWatcher = configWatcher;
             _callbacks = callbacks.ToImmutableList();
             _port = port;
+            _useHttps = true;
         }
 
         public DiscoveryServerBuilder ConfigureDiscoveryService<T>() where T : class
@@ -65,6 +67,12 @@ namespace Envoy.Control.Server
         public DiscoveryServerBuilder ConfigureLogging(Action<ILoggingBuilder> action)
         {
             _loggingAction = action;
+            return this;
+        }
+
+        public DiscoveryServerBuilder UseHttps(bool value)
+        {
+            _useHttps = value;
             return this;
         }
 
@@ -93,7 +101,10 @@ namespace Envoy.Control.Server
                         k.ListenAnyIP(_port, options =>
                         {
                             options.Protocols = HttpProtocols.Http2;
-                            options.UseHttps();
+                            if (_useHttps)
+                            {
+                                options.UseHttps();
+                            }
                         });
                     })
                     .Configure((app) =>

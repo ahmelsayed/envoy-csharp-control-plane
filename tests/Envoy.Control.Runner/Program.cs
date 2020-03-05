@@ -31,6 +31,7 @@ namespace Envoy.Control.Runner
             // Select the type of server. https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol
             var discoveryServer = DiscoveryServerBuilder
                 .CreateFor(cache, 6000)
+                .UseHttps(false)
                 .ConfigureDiscoveryService<ClusterDiscoveryService>()
                 .ConfigureDiscoveryService<EndpointDiscoveryService>()
                 .ConfigureDiscoveryService<RouteDiscoveryService>()
