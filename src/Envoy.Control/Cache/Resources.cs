@@ -6,6 +6,7 @@ using Envoy.Api.V2.Auth;
 using Envoy.Api.V2.ListenerNS;
 using Envoy.Config.Filter.Network.HttpConnectionManager.V2;
 using Google.Protobuf;
+using Google.Protobuf.Reflection;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Logging;
 
@@ -153,7 +154,7 @@ namespace Envoy.Control.Cache
 
                                 // TODO: Filter#getConfig() is deprecated, migrate to use Filter#getTypedConfig().
                                 // TODO: revisit
-                                var config = StructToHttpConnectionManager(filter.Config);
+                                var config = filter.TypedConfig.Unpack<HttpConnectionManager>();
 
                                 if (config.RouteSpecifierCase == HttpConnectionManager.RouteSpecifierOneofCase.Rds &&
                                     !string.IsNullOrEmpty(config.Rds.RouteConfigName))
@@ -173,13 +174,6 @@ namespace Envoy.Control.Cache
             }
 
             return refs.ToImmutable();
-        }
-
-        // TODO: revisit
-        private static HttpConnectionManager StructToHttpConnectionManager(Struct _struct)
-        {
-            var json = new JsonFormatter(JsonFormatter.Settings.Default.WithPreserveProtoFieldNames(true)).Format(_struct);
-            return JsonParser.Default.Parse<HttpConnectionManager>(json);
         }
     }
 }

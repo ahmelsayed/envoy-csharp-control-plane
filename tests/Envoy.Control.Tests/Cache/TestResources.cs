@@ -154,7 +154,7 @@ namespace Envoy.Control.Cache.Tests
             filterChain.Filters.Add(new Filter
             {
                 Name = Resources.FILTER_HTTP_CONNECTION_MANAGER,
-                Config = MessageToStruct(manager),
+                TypedConfig = Any.Pack(manager),
             });
 
             listener.FilterChains.Add(filterChain);
@@ -198,19 +198,6 @@ namespace Envoy.Control.Cache.Tests
                     }
                 }
             };
-        }
-
-        private static Struct MessageToStruct(IMessage message)
-        {
-            try
-            {
-                var json = new JsonFormatter(JsonFormatter.Settings.Default.WithPreserveProtoFieldNames(true)).Format(message);
-                return JsonParser.Default.Parse<Struct>(json);
-            }
-            catch (InvalidProtocolBufferException e)
-            {
-                throw new InvalidCastException("Failed to convert protobuf message to struct", e);
-            }
         }
     }
 }
